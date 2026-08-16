@@ -21,7 +21,7 @@ data class BackupData(
     val messages: List<MessageEntity>,
     val assistants: List<AssistantEntity>,
     val providers: List<ProviderEntity>,
-    // 包含部分关键设置
+    // Includes key settings
     val settings: AppSettingsBackup? = null
 )
 
@@ -38,7 +38,7 @@ class DataRepository(private val context: Context) {
     private val database = AppDatabase.getDatabase(context)
     private val settingsRepository = SettingsRepository(context)
     
-    // 宽松的 JSON 解析器
+    // Permissive JSON serializer/deserializer
     private val json = Json { 
         ignoreUnknownKeys = true 
         prettyPrint = true
@@ -80,25 +80,22 @@ class DataRepository(private val context: Context) {
             
             val backupData = json.decodeFromString<BackupData>(content)
             
-            // 恢复数据 (策略: 删除旧数据，插入备份数据? 还是合并? 
-            // 简单起见，且为了避免冲突，通常建议"覆盖"或"清理后导入"。
-            // 这里采用清除旧数据策略，确保一致性)
-            
+            // Restore data (clean and overwrite strategy for consistency)
             database.withTransaction {
-                // 清理
+                // Clear existing data
                 database.messageDao().deleteAllMessages()
                 database.conversationDao().deleteAllConversations()
                 database.assistantDao().deleteAllAssistants()
                 database.providerDao().deleteAllProviders()
                 
-                // 插入
+                // Insert backup data
                 database.assistantDao().insertAssistants(backupData.assistants)
                 database.providerDao().insertProviders(backupData.providers)
                 database.conversationDao().insertConversations(backupData.conversations)
                 database.messageDao().insertMessages(backupData.messages)
             }
             
-            // 恢复设置
+            // Restore settings
             backupData.settings?.let { s ->
                 s.apiKey?.let { settingsRepository.setApiKey(it) }
                 s.baseUrl?.let { settingsRepository.setBaseUrl(it) }

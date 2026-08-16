@@ -39,7 +39,7 @@ import java.util.UUID
 import androidx.compose.ui.platform.LocalContext
 
 /**
- * 助手列表页面 - Liquid Glass 风格
+ * Assistant List Screen - Liquid Glass Style
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,12 +78,11 @@ fun AssistantListScreen(
                 isInteractive = true,
                 padding = PaddingValues(0.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
             
-            
             Text(
-                if (isSelectionMode) "选择助手" else "助手管理",
+                if (isSelectionMode) "Select Assistant" else "Assistant Management",
                 style = TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
@@ -99,11 +98,11 @@ fun AssistantListScreen(
                 isInteractive = true,
                 padding = PaddingValues(0.dp)
             ) {
-                Icon(Icons.Default.Add, "新建", tint = Color.White)
+                Icon(Icons.Default.Add, "New", tint = Color.White)
             }
         }
         
-        // 助手列表
+        // Assistant List
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -125,7 +124,6 @@ fun AssistantListScreen(
                 )
             }
             
-            // 空状态
             if (viewModel.assistants.isEmpty()) {
                 item {
                     Box(
@@ -143,12 +141,12 @@ fun AssistantListScreen(
                             )
                             Spacer(Modifier.height(16.dp))
                             Text(
-                                "暂无助手",
+                                "No Assistants Available",
                                 color = Color.White.copy(alpha = 0.6f)
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "点击右上角 + 创建第一个助手",
+                                "Tap the + button in the top right to create your first assistant",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.4f)
                             )
@@ -159,7 +157,7 @@ fun AssistantListScreen(
         }
     }
     
-    // 创建/编辑对话框
+    // Create/Edit Dialog
     if (showCreateDialog || editingAssistant != null) {
         AssistantEditDialog(
             assistant = editingAssistant,
@@ -279,7 +277,7 @@ private fun AssistantCard(
                 if (isSelected) {
                     Icon(
                         Lucide.Check,
-                        contentDescription = "已选中",
+                        contentDescription = "Selected",
                         tint = Color(0xFF34C759),
                         modifier = Modifier.size(20.dp)
                     )
@@ -287,12 +285,12 @@ private fun AssistantCard(
                 }
                 
                 IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                    Icon(Lucide.Pencil, "编辑", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                    Icon(Lucide.Pencil, "Edit", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                 }
                 
                 var showDeleteDialog by remember { mutableStateOf(false) }
                 IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(Lucide.Trash2, "删除", tint = Color(0xFFFF3B30).copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                    Icon(Lucide.Trash2, "Delete", tint = Color(0xFFFF3B30).copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                 }
                 
                 if (showDeleteDialog) {
@@ -302,9 +300,9 @@ private fun AssistantCard(
                             onDelete()
                             showDeleteDialog = false
                         },
-                        title = "删除助手",
-                        message = "确定要删除此助手吗？此操作不可撤销。",
-                        confirmText = "删除",
+                        title = "Delete Assistant",
+                        message = "Are you sure you want to delete this assistant? This action cannot be undone.",
+                        confirmText = "Delete",
                         icon = Lucide.Trash2,
                         backdrop = backdrop
                     )
@@ -328,7 +326,6 @@ private fun AssistantEditDialog(
     var topP by remember { mutableStateOf(assistant?.topP ?: 1.0f) }
     var avatar by remember { mutableStateOf(assistant?.avatar ?: "🤖") }
 
-    
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Box(
             modifier = Modifier
@@ -351,7 +348,7 @@ private fun AssistantEditDialog(
             ) {
                 item {
                     Text(
-                        text = if (assistant == null) "创建助手" else "编辑助手",
+                        text = if (assistant == null) "Create Assistant" else "Edit Assistant",
                         style = TextStyle(
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
@@ -365,7 +362,7 @@ private fun AssistantEditDialog(
                     LiquidTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = "名称",
+                        label = "Name",
                         backdrop = backdrop
                     )
                 }
@@ -374,7 +371,7 @@ private fun AssistantEditDialog(
                     LiquidTextField(
                         value = avatar,
                         onValueChange = { avatar = it },
-                        label = "头像 (Emoji)",
+                        label = "Avatar (Emoji)",
                         backdrop = backdrop
                     )
                 }
@@ -383,14 +380,12 @@ private fun AssistantEditDialog(
                     LiquidTextField(
                         value = systemPrompt,
                         onValueChange = { systemPrompt = it },
-                        label = "系统提示词",
+                        label = "System Prompt",
                         singleLine = false,
                         modifier = Modifier.height(120.dp),
                         backdrop = backdrop
                     )
                 }
-                
-
 
                 item {
                     Column {
@@ -446,7 +441,7 @@ private fun AssistantEditDialog(
                             isInteractive = true,
                             tint = Color(0xFF8E8E93).copy(alpha = 0.5f)
                         ) {
-                            Text("取消", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Cancel", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                         
                         Spacer(Modifier.width(12.dp))
@@ -462,7 +457,7 @@ private fun AssistantEditDialog(
                             isInteractive = true,
                             tint = Color(0xFF007AFF)
                         ) {
-                            Text("保存", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }

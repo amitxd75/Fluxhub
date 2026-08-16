@@ -64,7 +64,7 @@ fun LiquidBottomTabs(
     backdrop: Backdrop,
     tabsCount: Int,
     modifier: Modifier = Modifier,
-    glassColor: String = "default", // 用户自定义颜色
+    glassColor: String = "default",
     content: @Composable RowScope.() -> Unit
 ) {
     val isLightTheme = !isSystemInDarkTheme()
@@ -72,7 +72,7 @@ fun LiquidBottomTabs(
         if (isLightTheme) Color(0xFF0088FF)
         else Color(0xFF0091FF)
     
-    // 解析用户自定义颜色
+    // Parse custom user glass color
     val customColor = when (glassColor) {
         "default" -> null
         else -> try {

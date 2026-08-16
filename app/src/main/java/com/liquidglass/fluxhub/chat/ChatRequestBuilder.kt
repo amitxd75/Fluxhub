@@ -21,6 +21,7 @@ object ChatRequestBuilder {
         aiMessageId: String?,
         contextSize: Int,
         systemPrompt: String?,
+        webSearch: Boolean = false,
         imageBase64Loader: (String) -> String?
     ): List<ChatMessage> {
         val baseMessages = history
@@ -28,15 +29,44 @@ object ChatRequestBuilder {
                 it.role == "user" ||
                     (it.role == "assistant" && !it.isStreaming && it.content.isNotBlank() && it.id != aiMessageId)
             }
-            .takeLast(contextSize)
 
-        val processedMessages = baseMessages.map { message ->
+        // Determine message slice: token-based (> 128), legacy count (<= 128), or unlimited (0)
+        val selectedMessages: List<UiMessage> = when {
+            contextSize <= 0 -> baseMessages
+            contextSize <= 128 -> baseMessages.takeLast(contextSize)
+            else -> {
+                // Token-budget-based trimming (~4 chars per token)
+                var accumulatedTokens = (systemPrompt?.length ?: 0) / 4
+                val reversedList = mutableListOf<UiMessage>()
+                for (msg in baseMessages.reversed()) {
+                    val msgTokens = (msg.content.length / 4) + 4
+                    if (accumulatedTokens + msgTokens <= contextSize || reversedList.isEmpty()) {
+                        accumulatedTokens += msgTokens
+                        reversedList.add(msg)
+                    } else {
+                        break
+                    }
+                }
+                reversedList.reversed()
+            }
+        }
+
+        val processedMessages = selectedMessages.map { message ->
             ChatMessage(message.role, buildContentElement(message.content, imageBase64Loader))
         }.filter { it.content != null }
 
-        val trimmedSystemPrompt = systemPrompt?.takeIf { it.isNotBlank() }
-        return if (trimmedSystemPrompt != null) {
-            listOf(ChatMessage("system", JsonPrimitive(trimmedSystemPrompt))) + processedMessages
+        val webSearchDirective = if (webSearch) {
+            "\n\n[Web Search Mode: Active. You have live Internet search capabilities. When answering questions about real-time, current events, recent developments, people, dates, or factual queries, perform web search and retrieve fresh web information. Provide a detailed, helpful, and up-to-date answer directly to the user.]"
+        } else ""
+
+        val finalSystemPrompt = when {
+            systemPrompt.isNullOrBlank() && webSearch -> webSearchDirective.trim()
+            !systemPrompt.isNullOrBlank() -> (systemPrompt + webSearchDirective).trim()
+            else -> null
+        }
+
+        return if (!finalSystemPrompt.isNullOrBlank()) {
+            listOf(ChatMessage("system", JsonPrimitive(finalSystemPrompt))) + processedMessages
         } else {
             processedMessages
         }
@@ -50,8 +80,17 @@ object ChatRequestBuilder {
         topP: Float,
         maxTokens: Int?,
         reasoningEffort: String?,
-        includeStreamOptions: Boolean
+        thinkingBudget: Int = 0,
+        includeStreamOptions: Boolean = false,
+        webSearch: Boolean = false,
+        effectiveBaseUrl: String = ""
     ): JsonObject {
+        val modelLower = model.lowercase()
+        val isReasoningModel = modelLower.startsWith("o1") || 
+                               modelLower.startsWith("o3") || 
+                               modelLower.contains("reasoner") || 
+                               modelLower.contains("r1")
+
         return buildJsonObject {
             put("model", model)
             put("messages", buildJsonArray {
@@ -63,24 +102,24 @@ object ChatRequestBuilder {
                 }
             })
             put("stream", stream)
-            if (stream && includeStreamOptions) {
-                put("stream_options", buildJsonObject {
-                    put("include_usage", true)
-                })
-            }
             put("temperature", temperature)
             put("top_p", topP)
             maxTokens?.let { put("max_tokens", it) }
-            reasoningEffort?.let { put("reasoning_effort", it) }
+            
+            // Standard OpenAI reasoning effort specification for reasoning architectures
+            if (isReasoningModel && !reasoningEffort.isNullOrBlank()) {
+                put("reasoning_effort", reasoningEffort)
+            }
         }
     }
 
     fun shouldSendOpenAiOnlyOptions(effectiveBaseUrl: String): Boolean {
-        return effectiveBaseUrl.contains("api.openai.com", ignoreCase = true)
+        return false
     }
 
     fun reasoningEffortOrNull(effectiveBaseUrl: String, thinkingBudget: Int): String? {
-        if (!shouldSendOpenAiOnlyOptions(effectiveBaseUrl) || thinkingBudget == 0) return null
+        if (thinkingBudget == 0) return null
+        if (thinkingBudget == -1) return null
         return when (thinkingBudget) {
             in 1..4096 -> "low"
             in 4097..16000 -> "medium"

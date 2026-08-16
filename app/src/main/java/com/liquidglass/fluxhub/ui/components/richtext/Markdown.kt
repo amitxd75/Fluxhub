@@ -38,6 +38,9 @@ import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Lucide
+import androidx.collection.LruCache
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
@@ -70,27 +73,29 @@ private val parser by lazy {
     MarkdownParser(flavour)
 }
 
+private val astCache = LruCache<String, Pair<String, ASTNode>>(128)
+
 private val THINKING_REGEX = Regex("<think>([\\s\\S]*?)(?:</think>|$)", RegexOption.DOT_MATCHES_ALL)
 private val CODE_BLOCK_REGEX = Regex("```[\\s\\S]*?```|`[^`\\n]*`", RegexOption.DOT_MATCHES_ALL)
 
-// 预处理markdown内容
+// Preprocess markdown content
 private fun preProcess(content: String): String {
-    // 替换思考块为引用
+    // Replace thinking blocks with blockquotes
     return content.replace(THINKING_REGEX) { matchResult ->
         matchResult.groupValues[1].lines().filter { it.isNotBlank() }.joinToString("\n") { ">$it" }
     }
 }
 
 object HeaderStyle {
-    val H1 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 24.sp)
-    val H2 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-    val H3 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-    val H4 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-    val H5 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-    val H6 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+    val H1 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color.White, shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f))
+    val H2 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 19.sp, color = Color.White, shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f))
+    val H3 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color.White, shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 3f))
+    val H4 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White, shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 3f))
+    val H5 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White, shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 2f))
+    val H6 = TextStyle(fontStyle = FontStyle.Normal, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White, shadow = androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 2f))
 }
 
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
 @Composable
 fun MarkdownBlock(
     content: String,
@@ -98,32 +103,46 @@ fun MarkdownBlock(
     style: TextStyle = LocalTextStyle.current,
     onClickCitation: (String) -> Unit = {}
 ) {
-    var data by remember {
-        val preprocessed = preProcess(content)
-        val astTree = parser.buildMarkdownTreeFromString(preprocessed)
-        // 使用 referentialEqualityPolicy：只有引用变化时才触发重组
-        mutableStateOf(preprocessed to astTree, policy = referentialEqualityPolicy())
+    var data by remember(content) {
+        val cached = astCache.get(content)
+        if (cached != null) {
+            mutableStateOf(cached, policy = referentialEqualityPolicy())
+        } else {
+            val preprocessed = preProcess(content)
+            val astTree = parser.buildMarkdownTreeFromString(preprocessed)
+            val pair = preprocessed to astTree
+            astCache.put(content, pair)
+            mutableStateOf(pair, policy = referentialEqualityPolicy())
+        }
     }
 
-    // 监听内容变化，在后台线程重新解析AST树 (参考 RikkaHub)
     val updatedContent by rememberUpdatedState(content)
     LaunchedEffect(Unit) {
         snapshotFlow { updatedContent }
             .distinctUntilChanged()
+            .debounce(40)
             .mapLatest { text ->
-                // 参考 RikkaHub：无延迟，直接后台解析
-                val preprocessed = preProcess(text)
-                val astTree = parser.buildMarkdownTreeFromString(preprocessed)
-                preprocessed to astTree
+                val cached = astCache.get(text)
+                if (cached != null) {
+                    cached
+                } else {
+                    val preprocessed = withContext(Dispatchers.Default) {
+                        preProcess(text)
+                    }
+                    val astTree = withContext(Dispatchers.Default) {
+                        parser.buildMarkdownTreeFromString(preprocessed)
+                    }
+                    val pair = preprocessed to astTree
+                    astCache.put(text, pair)
+                    pair
+                }
             }
             .catch { it.printStackTrace() }
-            .flowOn(Dispatchers.Default) // 在后台线程解析AST树
             .collect { data = it }
     }
 
     val (preprocessed, astTree) = data
     
-    // 修复中文排版对齐问题
     val fixedStyle = style.merge(
         TextStyle(
             platformStyle = PlatformTextStyle(includeFontPadding = false),
@@ -136,9 +155,7 @@ fun MarkdownBlock(
     
     ProvideTextStyle(fixedStyle) {
         Column(
-            modifier = modifier
-                .padding(start = 4.dp)
-                // .animateContentSize() // 移除自动尺寸动画以解决展开/收起时的卡顿和布局抖动
+            modifier = modifier.padding(start = 4.dp)
         ) {
             astTree.children.fastForEach { child ->
                 MarkdownNode(node = child, content = preprocessed, onClickCitation = onClickCitation)
@@ -156,19 +173,19 @@ private fun MarkdownNode(
     listLevel: Int = 0
 ) {
     when (node.type) {
-        // 文件根节点
+        // Document Root
         MarkdownElementTypes.MARKDOWN_FILE -> {
             node.children.fastForEach { child ->
                 MarkdownNode(node = child, content = content, modifier = modifier, onClickCitation = onClickCitation)
             }
         }
 
-        // 段落
+        // Paragraph
         MarkdownElementTypes.PARAGRAPH -> {
             Paragraph(node = node, content = content, modifier = modifier, onClickCitation = onClickCitation)
         }
 
-        // 标题
+        // Headers
         MarkdownElementTypes.ATX_1, MarkdownElementTypes.ATX_2, MarkdownElementTypes.ATX_3,
         MarkdownElementTypes.ATX_4, MarkdownElementTypes.ATX_5, MarkdownElementTypes.ATX_6 -> {
             val style = when (node.type) {
@@ -197,7 +214,7 @@ private fun MarkdownNode(
             }
         }
 
-        // 无序列表
+        // Unordered List
         MarkdownElementTypes.UNORDERED_LIST -> {
             UnorderedListNode(
                 node = node,
@@ -208,7 +225,7 @@ private fun MarkdownNode(
             )
         }
 
-        // 有序列表
+        // Ordered List
         MarkdownElementTypes.ORDERED_LIST -> {
             OrderedListNode(
                 node = node,
@@ -244,7 +261,7 @@ private fun MarkdownNode(
             }
         }
 
-        // 引用块
+        // Blockquote
         MarkdownElementTypes.BLOCK_QUOTE -> {
             ProvideTextStyle(LocalTextStyle.current.copy(fontStyle = FontStyle.Italic)) {
                 val borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
@@ -265,7 +282,7 @@ private fun MarkdownNode(
             }
         }
 
-        // 链接
+        // Inline Link
         MarkdownElementTypes.INLINE_LINK -> {
             val linkText = node.findChildOfTypeRecursive(MarkdownElementTypes.LINK_TEXT)
                 ?.findChildOfTypeRecursive(GFMTokenTypes.GFM_AUTOLINK, MarkdownTokenTypes.TEXT)?.getTextInNode(content)
@@ -285,7 +302,7 @@ private fun MarkdownNode(
             )
         }
 
-        // 斜体
+        // Emphasis
         MarkdownElementTypes.EMPH -> {
             ProvideTextStyle(TextStyle(fontStyle = FontStyle.Italic)) {
                 node.children.fastForEach { child ->
@@ -294,7 +311,7 @@ private fun MarkdownNode(
             }
         }
 
-        // 加粗
+        // Strong
         MarkdownElementTypes.STRONG -> {
             ProvideTextStyle(TextStyle(fontWeight = FontWeight.SemiBold)) {
                 node.children.fastForEach { child ->
@@ -303,17 +320,17 @@ private fun MarkdownNode(
             }
         }
 
-        // 删除线
+        // Strikethrough
         GFMElementTypes.STRIKETHROUGH -> {
             Text(text = node.getTextInNode(content), textDecoration = TextDecoration.LineThrough, modifier = modifier)
         }
 
-        // 表格
+        // Table
         GFMElementTypes.TABLE -> {
             TableNode(node = node, content = content, modifier = modifier)
         }
 
-        // 水平线
+        // Horizontal Rule
         MarkdownTokenTypes.HORIZONTAL_RULE -> {
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 16.dp),
@@ -322,7 +339,7 @@ private fun MarkdownNode(
             )
         }
 
-        // 行内代码
+        // Inline Code
         MarkdownElementTypes.CODE_SPAN -> {
             val code = node.getTextInNode(content).trim('`')
             Surface(
@@ -337,13 +354,13 @@ private fun MarkdownNode(
             }
         }
 
-        // 代码块
+        // Code Block
         MarkdownElementTypes.CODE_BLOCK -> {
             val code = node.getTextInNode(content)
             CodeBlock(code = code, language = "plaintext")
         }
 
-        // 围栏代码块
+        // Fenced Code Block
         MarkdownElementTypes.CODE_FENCE -> {
             val contentStartIndex = node.children.indexOfFirst { it.type == MarkdownTokenTypes.CODE_FENCE_CONTENT }
             if (contentStartIndex == -1) return
@@ -356,12 +373,11 @@ private fun MarkdownNode(
             CodeBlock(code = code, language = language)
         }
 
-        // 纯文本
+        // Plain Text & HTML Block
         MarkdownTokenTypes.TEXT,
         MarkdownElementTypes.HTML_BLOCK,
         MarkdownTokenTypes.HTML_TAG,
         MarkdownTokenTypes.HTML_BLOCK_CONTENT -> {
-            // 简单处理常见的 HTML 实体
             val rawText = node.getTextInNode(content)
             val decodedText = rawText
                 .replace("&lt;", "<")
@@ -373,7 +389,6 @@ private fun MarkdownNode(
             Text(text = decodedText, modifier = modifier)
         }
 
-        // 其他类型，递归处理
         else -> {
             node.children.fastForEach { child ->
                 MarkdownNode(node = child, content = content, modifier = modifier, onClickCitation = onClickCitation)
@@ -505,7 +520,6 @@ private fun ListItemNode(
         if (directContent.isNotEmpty()) {
             Row {
                 Text(text = bulletText, modifier = Modifier.alignByBaseline())
-                // 使用 MarkdownRichText 替代 FlowRow，修复列表文本粘连
                 MarkdownRichText(
                     children = directContent,
                     content = content,
@@ -563,7 +577,6 @@ private fun CodeBlock(
     val scope = rememberCoroutineScope()
     var showCopied by remember { mutableStateOf(false) }
     
-    // 复制成功提示自动消失
     LaunchedEffect(showCopied) {
         if (showCopied) {
             kotlinx.coroutines.delay(2000)
@@ -572,8 +585,8 @@ private fun CodeBlock(
     }
     
     val lineCount = code.lines().size
-    val isLongCode = lineCount > 5 // 超过 5 行就视为长代码
-    var isExpanded by remember { mutableStateOf(false) } // 默认折叠
+    val isLongCode = lineCount > 5
+    var isExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -581,9 +594,8 @@ private fun CodeBlock(
             .padding(vertical = 8.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            // 移除 animateContentSize() 以消除展开/收起卡顿
     ) {
-        // 顶部操作栏：语言标签 + 复制按钮 + 展开/收起
+        // Top action bar: Language label + Copy button + Expand/Collapse
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -592,7 +604,7 @@ private fun CodeBlock(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 语言标签
+            // Language label
             Text(
                 text = language.uppercase(),
                 fontSize = 11.sp,
@@ -601,7 +613,7 @@ private fun CodeBlock(
             )
             
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 展开/收起指示 (仅长代码显示)
+                // Expand/Collapse indicator (for longer snippets)
                 if (isLongCode) {
                     Row(
                         modifier = Modifier
@@ -611,13 +623,13 @@ private fun CodeBlock(
                     ) {
                         Icon(
                             imageVector = if (isExpanded) Lucide.ChevronUp else Lucide.ChevronDown,
-                            contentDescription = if (isExpanded) "收起" else "展开",
+                            contentDescription = if (isExpanded) "Collapse" else "Expand",
                             modifier = Modifier.size(14.dp),
                             tint = Color.White.copy(alpha = 0.6f)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = if (isExpanded) "收起" else "展开",
+                            text = if (isExpanded) "Collapse" else "Expand",
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.6f)
                         )
@@ -625,7 +637,7 @@ private fun CodeBlock(
                     Spacer(Modifier.width(8.dp))
                 }
 
-                // 复制按钮
+                // Copy button
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
@@ -643,12 +655,12 @@ private fun CodeBlock(
                 ) {
                     Icon(
                         imageVector = if (showCopied) Lucide.Check else Lucide.Copy,
-                        contentDescription = if (showCopied) "已复制" else "复制代码",
+                        contentDescription = if (showCopied) "Copied" else "Copy code",
                         modifier = Modifier.size(12.dp),
                         tint = if (showCopied) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.6f)
                     )
                     Text(
-                        text = if (showCopied) "已复制" else "复制",
+                        text = if (showCopied) "Copied" else "Copy",
                         fontSize = 10.sp,
                         color = if (showCopied) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.6f)
                     )
@@ -656,7 +668,7 @@ private fun CodeBlock(
             }
         }
         
-        // 代码内容
+        // Code content
         val heightModifier = if (isExpanded) Modifier else Modifier.heightIn(max = 240.dp)
         
         SelectionContainer {
@@ -673,7 +685,6 @@ private fun CodeBlock(
                     lineHeight = 20.sp
                 )
                 
-                // 收起时的渐变遮罩
                 if (!isExpanded) {
                    Box(
                         modifier = Modifier
@@ -691,7 +702,7 @@ private fun CodeBlock(
                             .clickable { isExpanded = true }
                     ) {
                         Text(
-                            text = "点击展开查看完整代码",
+                            text = "Tap to expand full code",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                             modifier = Modifier.align(Alignment.Center)
@@ -703,7 +714,7 @@ private fun CodeBlock(
     }
 }
 
-// 递归构建 AnnotatedString
+// Recursively build AnnotatedString
 private fun appendMarkdownChildren(node: ASTNode, content: String, builder: AnnotatedString.Builder) {
     when (node.type) {
         MarkdownTokenTypes.TEXT,
@@ -782,7 +793,7 @@ private fun appendMarkdownChildren(node: ASTNode, content: String, builder: Anno
     }
 }
 
-// 扩展函数：递归查找子节点
+// Extension helper: Recursively find child node
 private fun ASTNode.findChildOfTypeRecursive(vararg types: org.intellij.markdown.IElementType): ASTNode? {
     children.forEach { child ->
         if (child.type in types) return child
@@ -791,7 +802,7 @@ private fun ASTNode.findChildOfTypeRecursive(vararg types: org.intellij.markdown
     return null
 }
 
-// 扩展函数：获取下一个兄弟节点
+// Extension helper: Get next sibling
 private fun ASTNode.nextSibling(): ASTNode? {
     val parent = this.parent ?: return null
     val index = parent.children.indexOf(this)
@@ -800,8 +811,7 @@ private fun ASTNode.nextSibling(): ASTNode? {
     } else null
 }
 
-// 扩展函数：从文本中获取节点内容
+// Extension helper: Get node text content
 private fun ASTNode.getTextInNode(text: String): String {
     return text.substring(startOffset, endOffset)
 }
-

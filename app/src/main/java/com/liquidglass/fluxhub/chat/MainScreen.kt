@@ -32,10 +32,12 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -71,24 +73,23 @@ fun MainScreen(
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     
-    // 等待核心配置加载完成，防止壁纸闪烁
-    // 在配置加载完成前不渲染任何内容，配合 Window 背景色实现平滑过渡
+    // Wait for core settings to initialize before rendering
     if (!viewModel.isSettingsInitialized) {
         return
     }
 
-    // 默认打开首页 (Tab 0)
+    // Default to Home (Tab 0)
     var selectedTab by remember { mutableIntStateOf(0) }
     
     val backgroundBitmap = remember(viewModel.wallpaperUri) {
         val uri = viewModel.wallpaperUri
         when {
             uri == null -> {
-                // 默认壁纸
+                // Default wallpaper
                 BitmapFactory.decodeResource(context.resources, R.drawable.wallpaper_liquid)
             }
             uri.startsWith("preset:") -> {
-                // 预设壁纸
+                // Preset wallpaper
                 val presetName = uri.removePrefix("preset:")
                 val resourceId = when (presetName) {
                     "wallpaper_liquid" -> R.drawable.wallpaper_liquid
@@ -98,11 +99,10 @@ fun MainScreen(
                 BitmapFactory.decodeResource(context.resources, resourceId)
             }
             else -> {
-                // 自定义壁纸
+                // Custom wallpaper
                 try {
                     val parsedUri = android.net.Uri.parse(uri)
                     
-                    // 第一步：获取图片尺寸（不加载到内存）
                     val options = BitmapFactory.Options().apply {
                         inJustDecodeBounds = true
                     }
@@ -110,17 +110,15 @@ fun MainScreen(
                         BitmapFactory.decodeStream(stream, null, options)
                     }
                     
-                    // 第二步：计算采样率（目标尺寸最大2048像素，避免OOM）
                     val targetSize = 2048
                     var sampleSize = 1
                     while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
                         sampleSize *= 2
                     }
                     
-                    // 第三步：使用采样率加载图片
                     val decodeOptions = BitmapFactory.Options().apply {
                         inSampleSize = sampleSize
-                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565 // 使用 RGB_565 节省内存
+                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
                     }
                     context.contentResolver.openInputStream(parsedUri)?.use { stream ->
                         BitmapFactory.decodeStream(stream, null, decodeOptions)
@@ -139,28 +137,31 @@ fun MainScreen(
     
     val backdrop = rememberLayerBackdrop()
     
-    // 监听键盘可见性
+    // Keyboard visibility observer
     val isKeyboardVisible = rememberIsKeyboardVisible()
     
-    // 为 ChatScreen 提升 drawerState
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     
-    // 将 listState 提升到 MainScreen 级别，保持滚动位置
     val chatListState = rememberLazyListState()
     
-    // 快捷提示词状态
     var pendingPrompt by remember { mutableStateOf<String?>(null) }
     
-    // 保持各页面的子页面状态 (Moved to top scope for access in Bottom Bar)
     var chatSubPage by remember { mutableStateOf<String?>(null) }
     var settingsSubPage by remember { mutableStateOf<String?>(null) }
+    
+    var visitedTabs by rememberSaveable { mutableStateOf(setOf(selectedTab)) }
+    LaunchedEffect(selectedTab) {
+        if (!visitedTabs.contains(selectedTab)) {
+            visitedTabs = visitedTabs + selectedTab
+        }
+    }
     
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // 背景图片（共享）
+        // Shared background wallpaper
         if (backgroundBitmap != null) {
             Image(
                 bitmap = backgroundBitmap.asImageBitmap(),
@@ -172,30 +173,16 @@ fun MainScreen(
             )
         }
         
-        // 创建动态字体样式
+        // Dynamic typography styles
         val textStyles = GlassTextStyles.create(
             colorMode = viewModel.textColorMode,
             shadowEnabled = viewModel.textShadowEnabled
         )
         
-        // 内容区域
+        // Content Area with Warm Tab Cache
         Box(modifier = Modifier.fillMaxSize()) {
-            // 使用 WindowInsets 计算底部 Padding，实现与键盘的完美物理同步
-            // 当键盘高度 < 80dp 时，Padding 补偿剩余高度
-            // 当键盘高度 >= 80dp 时，Padding 为 0 (由内部 imePadding 接管)
-            // 这样总高度始终 >= 80dp (键盘收起时) 或 = 键盘高度 (键盘弹出时)
-            val density = LocalDensity.current
-            val imeHeight = WindowInsets.ime.getBottom(density)
-            val imeHeightDp = with(density) { imeHeight.toDp() }
-            val bottomPadding = (100.dp - imeHeightDp).coerceAtLeast(0.dp) // 增加到100dp避免重叠
+            val bottomPadding = 90.dp
             
-            // 预加载所有页面：消除首次切换的编译卡顿
-            // 使用 key 保持状态，但只显示当前选中的页面
-            // 这样避免了 z-index 和触摸事件冲突
-            
-            // 保持各页面的子页面状态 (Hoisted)
-            
-            // BackHandler 处理
             BackHandler(enabled = chatSubPage != null && selectedTab == 1) {
                 chatSubPage = null
             }
@@ -203,19 +190,18 @@ fun MainScreen(
                 settingsSubPage = null
             }
             
-            // 使用 AnimatedContent 切换页面，只渲染当前选中的页面
-            // 避免不可见页面持续占用 GPU 资源
-            AnimatedContent(
-                targetState = selectedTab,
-                transitionSpec = {
-                    (fadeIn(animationSpec = tween(300)) + 
-                     scaleIn(initialScale = 0.98f, animationSpec = tween(300))).togetherWith(
-                     fadeOut(animationSpec = tween(300)))
-                },
-                label = "TabContent"
-            ) { targetTab ->
-                when (targetTab) {
-                    0 -> HomeScreen(
+            // Tab 0: Home Screen (Cached)
+            if (visitedTabs.contains(0)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val isCurrent = selectedTab == 0
+                            alpha = if (isCurrent) 1f else 0f
+                            translationX = if (isCurrent) 0f else (if (selectedTab > 0) -2000f else 2000f)
+                        }
+                ) {
+                    HomeScreen(
                         backdrop = backdrop,
                         bottomPadding = PaddingValues(bottom = bottomPadding),
                         onNavigateToChat = { selectedTab = 1 },
@@ -229,124 +215,108 @@ fun MainScreen(
                         },
                         viewModel = viewModel
                     )
-                    1 -> {
-                        AnimatedContent(
-                            targetState = chatSubPage,
-                            transitionSpec = {
-                                if (targetState != null) {
-                                    (slideInHorizontally { it } + fadeIn()).togetherWith(
-                                        slideOutHorizontally { -it } + fadeOut()
-                                    )
-                                } else {
-                                    (slideInHorizontally { -it } + fadeIn()).togetherWith(
-                                        slideOutHorizontally { it } + fadeOut()
-                                    )
-                                }
-                            },
-                            label = "ChatSubPage"
-                        ) { subPage ->
-                            if (subPage == "assistant_selection") {
-                                AssistantListScreen(
-                                    onBack = { chatSubPage = null },
-                                    viewModel = viewModel,
-                                    backdrop = backdrop,
-                                    bottomPadding = PaddingValues(bottom = bottomPadding),
-                                    isSelectionMode = true
-                                )
-                            } else {
-                                ChatScreen(
-                                    backdrop = backdrop,
-                                    bottomPadding = PaddingValues(bottom = bottomPadding), 
-                                    onNavigateToSettings = { selectedTab = 2 },
-                                    onNavigateToAssistantSelection = { chatSubPage = "assistant_selection" },
-                                    viewModel = viewModel,
-                                    listState = chatListState,
-                                    drawerState = drawerState,
-                                    initialPrompt = pendingPrompt,
-                                    onPromptConsumed = { pendingPrompt = null }
-                                )
-                            }
+                }
+            }
+            
+            // Tab 1: Chat Screen (Cached & Warm)
+            if (visitedTabs.contains(1)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val isCurrent = selectedTab == 1
+                            alpha = if (isCurrent) 1f else 0f
+                            translationX = if (isCurrent) 0f else (if (selectedTab > 1) -2000f else 2000f)
                         }
+                ) {
+                    if (chatSubPage == "assistant_selection") {
+                        AssistantListScreen(
+                            onBack = { chatSubPage = null },
+                            viewModel = viewModel,
+                            backdrop = backdrop,
+                            bottomPadding = PaddingValues(bottom = bottomPadding),
+                            isSelectionMode = true
+                        )
+                    } else {
+                        ChatScreen(
+                            backdrop = backdrop,
+                            bottomPadding = PaddingValues(bottom = bottomPadding), 
+                            onNavigateToSettings = { selectedTab = 2 },
+                            onNavigateToAssistantSelection = { chatSubPage = "assistant_selection" },
+                            viewModel = viewModel,
+                            listState = chatListState,
+                            drawerState = drawerState,
+                            initialPrompt = pendingPrompt,
+                            onPromptConsumed = { pendingPrompt = null }
+                        )
                     }
-                    2 -> {
-                        AnimatedContent(
-                            targetState = settingsSubPage,
-                            transitionSpec = {
-                                if (targetState != null) {
-                                    (slideInHorizontally { it } + fadeIn()).togetherWith(
-                                        slideOutHorizontally { -it } + fadeOut()
-                                    )
-                                } else {
-                                    (slideInHorizontally { -it } + fadeIn()).togetherWith(
-                                        slideOutHorizontally { it } + fadeOut()
-                                    )
-                                }
-                            },
-                            label = "SettingsSubPage"
-                        ) { subPage ->
-                            when (subPage) {
-                                "assistants" -> AssistantListScreen(
-                                    onBack = { settingsSubPage = null },
-                                    viewModel = viewModel,
-                                    backdrop = backdrop,
-                                    bottomPadding = PaddingValues(bottom = bottomPadding)
-                                )
-                                "providers" -> ProviderListScreen(
-                                    onBack = { settingsSubPage = null },
-                                    viewModel = viewModel,
-                                    backdrop = backdrop,
-                                    bottomPadding = PaddingValues(bottom = bottomPadding)
-                                )
-                                "display_settings" -> DisplaySettingsScreen(
-                                    onBack = { settingsSubPage = null },
-                                    viewModel = viewModel,
-                                    backdrop = backdrop,
-                                    bottomPadding = PaddingValues(bottom = bottomPadding)
-                                )
-                                "dynamic_island_settings" -> DynamicIslandSettingsScreen(
-                                    onBack = { settingsSubPage = null },
-                                    viewModel = viewModel,
-                                    backdrop = backdrop,
-                                    bottomPadding = PaddingValues(bottom = bottomPadding)
-                                )
-                                else -> SettingsScreen(
-                                    onBack = { selectedTab = 1 },
-                                    viewModel = viewModel,
-                                    backdrop = backdrop,
-                                    isTab = true,
-                                    bottomPadding = PaddingValues(bottom = bottomPadding),
-                                    onNavigateToAssistants = { settingsSubPage = "assistants" },
-                                    onNavigateToProviders = { settingsSubPage = "providers" },
-                                    onNavigateToDisplay = { settingsSubPage = "display_settings" },
-                                    onNavigateToDynamicIsland = { settingsSubPage = "dynamic_island_settings" }
-                                )
-                            }
+                }
+            }
+            
+            // Tab 2: Settings Screen (Cached)
+            if (visitedTabs.contains(2)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val isCurrent = selectedTab == 2
+                            alpha = if (isCurrent) 1f else 0f
+                            translationX = if (isCurrent) 0f else 2000f
                         }
+                ) {
+                    when (settingsSubPage) {
+                        "assistants" -> AssistantListScreen(
+                            onBack = { settingsSubPage = null },
+                            viewModel = viewModel,
+                            backdrop = backdrop,
+                            bottomPadding = PaddingValues(bottom = bottomPadding)
+                        )
+                        "providers" -> ProviderListScreen(
+                            onBack = { settingsSubPage = null },
+                            viewModel = viewModel,
+                            backdrop = backdrop,
+                            bottomPadding = PaddingValues(bottom = bottomPadding)
+                        )
+                        "display_settings" -> DisplaySettingsScreen(
+                            onBack = { settingsSubPage = null },
+                            viewModel = viewModel,
+                            backdrop = backdrop,
+                            bottomPadding = PaddingValues(bottom = bottomPadding)
+                        )
+                        "dynamic_island_settings" -> DynamicIslandSettingsScreen(
+                            onBack = { settingsSubPage = null },
+                            viewModel = viewModel,
+                            backdrop = backdrop,
+                            bottomPadding = PaddingValues(bottom = bottomPadding)
+                        )
+                        else -> SettingsScreen(
+                            onBack = { selectedTab = 1 },
+                            viewModel = viewModel,
+                            backdrop = backdrop,
+                            isTab = true,
+                            bottomPadding = PaddingValues(bottom = bottomPadding),
+                            onNavigateToAssistants = { settingsSubPage = "assistants" },
+                            onNavigateToProviders = { settingsSubPage = "providers" },
+                            onNavigateToDisplay = { settingsSubPage = "display_settings" },
+                            onNavigateToDynamicIsland = { settingsSubPage = "dynamic_island_settings" }
+                        )
                     }
                 }
             }
         }
         
-        // 底部导航栏
-        // 使用 Offset 实现键盘跟随动画，仅在 Drawer 打开时使用 AnimatedVisibility 隐藏
-        // 解决键盘收起时的弹跳问题
-        val navDensity = LocalDensity.current
-        val navImeHeight = WindowInsets.ime.getBottom(navDensity)
-        val navImeHeightDp = with(navDensity) { navImeHeight.toDp() }
-
+        // Bottom Navigation Bar
         AnimatedVisibility(
-            visible = drawerState.isClosed,
+            visible = drawerState.isClosed && !isKeyboardVisible,
             enter = slideInVertically { it },
             exit = slideOutVertically { it },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = navImeHeightDp)
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             Box(
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(bottom = 8.dp, start = 72.dp, end = 72.dp)
-                    .widthIn(max = 220.dp) // 进一步缩短导航栏宽度
+                    .widthIn(max = 220.dp)
             ) {
                 LiquidBottomTabs(
                     selectedTabIndex = { selectedTab },
@@ -368,7 +338,7 @@ fun MainScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                             selectedTab = 0 
-                            settingsSubPage = null // Reset Settings navigation
+                            settingsSubPage = null
                         }
                     ) {
                         Column(
@@ -378,13 +348,12 @@ fun MainScreen(
                             Icon(
                                 imageVector = Icons.Filled.Home,
                                 contentDescription = "Home",
-                                tint = if (selectedTab == 0) Color(0xFF007AFF) else Color.Gray,
-                                modifier = Modifier
-                                    .size(24.dp)
+                                tint = if (selectedTab == 0) Color.White else Color.White.copy(alpha = 0.75f),
+                                modifier = Modifier.size(22.dp)
                             )
                             Spacer(Modifier.height(2.dp))
                             BasicText(
-                                text = "首页",
+                                text = "Home",
                                 style = textStyles.navLabelStyle(selectedTab == 0)
                             )
                         }
@@ -397,7 +366,7 @@ fun MainScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                             selectedTab = 1 
-                            settingsSubPage = null // Reset Settings navigation
+                            settingsSubPage = null
                         }
                     ) {
                         Column(
@@ -407,13 +376,12 @@ fun MainScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Chat,
                                 contentDescription = "Chat",
-                                tint = if (selectedTab == 1) Color(0xFF007AFF) else Color.Gray,
-                                modifier = Modifier
-                                    .size(24.dp)
+                                tint = if (selectedTab == 1) Color.White else Color.White.copy(alpha = 0.75f),
+                                modifier = Modifier.size(22.dp)
                             )
                             Spacer(Modifier.height(2.dp))
                             BasicText(
-                                text = "对话",
+                                text = "Chat",
                                 style = textStyles.navLabelStyle(selectedTab == 1)
                             )
                         }
@@ -435,13 +403,12 @@ fun MainScreen(
                             Icon(
                                 imageVector = Icons.Filled.Settings,
                                 contentDescription = "Settings",
-                                tint = if (selectedTab == 2) Color(0xFF007AFF) else Color.Gray,
-                                modifier = Modifier
-                                    .size(24.dp)
+                                tint = if (selectedTab == 2) Color.White else Color.White.copy(alpha = 0.75f),
+                                modifier = Modifier.size(22.dp)
                             )
                             Spacer(Modifier.height(2.dp))
                             BasicText(
-                                text = "设置",
+                                text = "Settings",
                                 style = textStyles.navLabelStyle(selectedTab == 2)
                             )
                         }
@@ -450,8 +417,7 @@ fun MainScreen(
             }
         }
         
-        // ========== 全局灵动岛 ==========
-        // 同步设置到控制器
+        // ========== Global Dynamic Island ==========
         LaunchedEffect(
             viewModel.dynamicIslandEnabled,
             viewModel.loginNotificationMode,
@@ -466,7 +432,6 @@ fun MainScreen(
             }
         }
         
-        // 全局灵动岛 UI
         com.liquidglass.fluxhub.chat.ui.components.DynamicIsland(
             data = com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.toData(),
             backdrop = backdrop,
@@ -480,29 +445,21 @@ fun MainScreen(
             onDismiss = { com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.hide() }
         )
         
-        // 登录成功通知（仅在首页显示，且用户已同意协议后）
+        // Welcome notification on Home tab after terms acceptance
         var hasShownLoginSuccess by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-        // 跟踪是否已经在本次应用启动中显示过（用于 "every" 模式，每次启动只显示一次）
         var hasShownThisSession by remember { mutableStateOf(false) }
         
         LaunchedEffect(selectedTab, viewModel.agreementAccepted) {
-            // 必须先同意用户协议
             if (!viewModel.agreementAccepted) return@LaunchedEffect
-            
-            // 仅在首页（Tab 0）显示
             if (selectedTab != 0) return@LaunchedEffect
             
-            // 等待 100ms 让协议弹窗消失
             kotlinx.coroutines.delay(100)
             
-            // 直接从 viewModel 读取设置（确保是最新值）
-            // 检查是否启用灵动岛
             if (!viewModel.dynamicIslandEnabled) return@LaunchedEffect
             
-            // 检查通知模式
             val shouldShow = when (viewModel.loginNotificationMode) {
-                "every" -> !hasShownThisSession // 每次进入软件显示一次
-                "first" -> !hasShownLoginSuccess // 仅登录成功后显示（跨 session 持久化）
+                "every" -> !hasShownThisSession
+                "first" -> !hasShownLoginSuccess
                 else -> !hasShownLoginSuccess
             }
             
@@ -510,20 +467,19 @@ fun MainScreen(
                 hasShownLoginSuccess = true
                 hasShownThisSession = true
                 com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                    message = "登录成功",
+                    message = "Welcome to FluxHub",
                     avatar = "👋",
-                    customTitle = "欢迎回来"
+                    customTitle = "Welcome Back"
                 )
             }
         }
         
-        // 用户协议弹窗
+        // User Agreement Dialog
         if (!viewModel.agreementAccepted) {
             AgreementDialog(
                 backdrop = backdrop,
                 onAccept = { viewModel.acceptAgreement() },
                 onDecline = {
-                    // 退出应用
                     (context as? android.app.Activity)?.finishAffinity()
                 }
             )
@@ -558,7 +514,6 @@ private fun AgreementDialog(
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
-    // 5秒倒计时
     var countdown by remember { mutableIntStateOf(5) }
     val canAccept = countdown <= 0
     
@@ -570,7 +525,7 @@ private fun AgreementDialog(
     }
     
     androidx.compose.ui.window.Dialog(
-        onDismissRequest = { /* 不允许点击外部关闭 */ },
+        onDismissRequest = { },
         properties = androidx.compose.ui.window.DialogProperties(
             dismissOnBackPress = false,
             dismissOnClickOutside = false
@@ -595,9 +550,8 @@ private fun AgreementDialog(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // 标题
                 BasicText(
-                    text = "用户协议与隐私政策",
+                    text = "Terms of Service & Privacy Policy",
                     style = TextStyle(
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
@@ -610,7 +564,6 @@ private fun AgreementDialog(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
                 
-                // 协议内容滚动区域
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -623,47 +576,45 @@ private fun AgreementDialog(
                         item {
                             BasicText(
                                 text = """
-欢迎使用 FluxHub！
+Welcome to FluxHub!
 
-在您开始使用本应用之前，请仔细阅读以下协议内容：
+Before using this application, please read the following terms and conditions carefully:
 
-【用户协议】
+[Terms of Service]
 
-1. 服务说明
-FluxHub 是一款 AI 对话应用，通过连接第三方 AI 服务提供商（如 OpenAI、Anthropic 等）为您提供智能对话服务。本应用仅作为连接工具，不直接提供 AI 模型服务。
+1. Service Description
+FluxHub is an AI conversational client application that connects to third-party AI service providers (such as OpenAI, Anthropic, DeepSeek, etc.) to deliver intelligent chat capabilities. This application operates solely as a client interface and does not directly host or operate AI models.
 
-2. 用户责任
-• 您需要自行提供有效的 API 密钥
-• 您对使用本应用产生的所有对话内容负责
-• 禁止使用本应用进行任何违法活动
-• 禁止生成、传播违法、有害或不当内容
+2. User Responsibilities
+• You are responsible for providing valid API credentials.
+• You are solely responsible for all conversation content and prompts generated using this application.
+• You agree not to use this application for any unlawful or abusive activities.
+• You agree not to generate or distribute illegal, infringing, or harmful content.
 
-3. 免责声明
-• 本应用不对 AI 生成的内容的准确性、完整性做任何保证
-• 因使用第三方 API 产生的费用由用户自行承担
-• 本应用不对因网络问题、API 服务中断等造成的损失负责
+3. Disclaimers
+• This application does not warrant the accuracy, completeness, or reliability of AI-generated responses.
+• Any costs or token usage incurred with third-party API providers are the sole responsibility of the user.
+• This application is not liable for service interruptions, network errors, or third-party outages.
 
-【隐私政策】
+[Privacy Policy]
 
-1. 数据收集
-• 本应用不收集您的个人身份信息
-• 您的 API 密钥仅存储在本地设备，不会上传至任何服务器
-• 对话记录仅保存在您的设备本地
+1. Data Collection
+• This application does not collect, track, or store personal identity information.
+• Your API keys are stored locally on your device only and are never uploaded to any intermediary servers.
+• Conversation records and chat histories are saved locally on your device.
 
-2. 数据使用
-• 所有对话数据直接发送至您配置的 AI 服务提供商
-• 本应用不会分析、存储或分享您的对话内容
+2. Data Usage
+• All conversation requests are transmitted directly from your device to the configured AI API endpoints.
+• This application does not analyze, monetize, or share your messages with third parties.
 
-3. 数据安全
-• 建议您定期更换 API 密钥
-• 妥善保管您的设备，避免他人访问您的对话记录
+3. Security Recommendations
+• We recommend rotating your API credentials periodically.
+• Safeguard your device to prevent unauthorized access to local records.
 
-4. 第三方服务
-本应用使用的第三方 AI 服务受其各自隐私政策约束，请在使用前阅读相关服务商的隐私政策。
+4. Third-Party Services
+Third-party AI providers are governed by their respective terms of service and privacy policies. Please review their policies before use.
 
-如您对本协议有任何疑问，请在使用前联系我们。
-
-继续使用本应用即表示您已阅读并同意上述全部内容。
+By continuing to use FluxHub, you confirm that you have read, understood, and agreed to these terms.
                                 """.trimIndent(),
                                 style = TextStyle(
                                     fontSize = 14.sp,
@@ -677,10 +628,9 @@ FluxHub 是一款 AI 对话应用，通过连接第三方 AI 服务提供商（�
                 
                 Spacer(Modifier.height(20.dp))
                 
-                // 倒计时提示
                 if (!canAccept) {
                     BasicText(
-                        text = "请仔细阅读协议内容 (${countdown}秒后可操作)",
+                        text = "Please review the agreement (${countdown}s remaining)",
                         style = TextStyle(
                             fontSize = 13.sp,
                             color = Color.White.copy(alpha = 0.6f)
@@ -689,12 +639,11 @@ FluxHub 是一款 AI 对话应用，通过连接第三方 AI 服务提供商（�
                     )
                 }
                 
-                // 按钮区域
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 拒绝按钮（可直接点击，不需等待）
+                    // Decline button
                     com.liquidglass.fluxhub.components.LiquidButton(
                         onClick = onDecline,
                         backdrop = backdrop,
@@ -703,7 +652,7 @@ FluxHub 是一款 AI 对话应用，通过连接第三方 AI 服务提供商（�
                         tint = Color.Red.copy(alpha = 0.5f)
                     ) {
                         BasicText(
-                            text = "我拒绝",
+                            text = "Decline",
                             style = TextStyle(
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -712,7 +661,7 @@ FluxHub 是一款 AI 对话应用，通过连接第三方 AI 服务提供商（�
                         )
                     }
                     
-                    // 同意按钮
+                    // Accept button
                     com.liquidglass.fluxhub.components.LiquidButton(
                         onClick = { if (canAccept) onAccept() },
                         backdrop = backdrop,
@@ -721,7 +670,7 @@ FluxHub 是一款 AI 对话应用，通过连接第三方 AI 服务提供商（�
                         tint = if (canAccept) Color(0xFF34C759) else Color.Gray.copy(alpha = 0.3f)
                     ) {
                         BasicText(
-                            text = if (canAccept) "我已阅读并同意" else "请阅读协议...",
+                            text = if (canAccept) "I Agree & Accept" else "Please Review Agreement...",
                             style = TextStyle(
                                 color = if (canAccept) Color.White else Color.White.copy(alpha = 0.4f),
                                 fontWeight = FontWeight.Bold,

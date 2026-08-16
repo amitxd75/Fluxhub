@@ -29,9 +29,9 @@ fun LiquidConfirmationDialog(
     onConfirm: () -> Unit,
     title: String,
     message: String,
-    confirmText: String = "确定",
-    dismissText: String = "取消",
-    confirmButtonColor: Color = Color(0xFFFF453A), // 默认红色，适合删除
+    confirmText: String = "Confirm",
+    dismissText: String = "Cancel",
+    confirmButtonColor: Color = Color(0xFFFF453A), // Red default for destructive actions
     icon: ImageVector? = null,
     iconColor: Color = Color(0xFFFF453A),
     backdrop: Backdrop

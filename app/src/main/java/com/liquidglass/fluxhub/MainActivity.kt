@@ -20,12 +20,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
-        // 请求最高刷新率 (120Hz 如果设备支持)
+        // Request highest refresh rate (120Hz if supported by hardware)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             window.attributes = window.attributes.apply {
                 layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
-            // 设置首选显示模式为最高刷新率
+            // Set preferred display mode to highest refresh rate
             val highRefreshMode = getSystemService(DisplayManager::class.java)
                 ?.getDisplay(Display.DEFAULT_DISPLAY)
                 ?.supportedModes
@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val chatViewModel: ChatViewModel = viewModel()
-            // 观察主题设置
+            // Observe theme preference
             val themeMode = chatViewModel.themeMode
             val isSystemDark = isSystemInDarkTheme()
             

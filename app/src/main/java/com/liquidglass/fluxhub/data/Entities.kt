@@ -23,13 +23,13 @@ data class ConversationEntity(
     @PrimaryKey
     val id: String,
     val title: String,
-    val assistantId: String? = null, // 绑定的助手
+    val assistantId: String? = null, // Associated assistant ID
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
 /**
- * 助手实体 - 每个助手有独立的提示词和参数配置
+ * Assistant entity - Each assistant has its own prompt and parameter configuration
  */
 @Serializable
 @Entity(tableName = "assistants")
@@ -37,18 +37,18 @@ data class AssistantEntity(
     @PrimaryKey
     val id: String,
     val name: String,
-    val avatar: String? = null, // emoji 或图片 URI
+    val avatar: String? = null, // Emoji or image URI
     val systemPrompt: String = "",
     val temperature: Float = 0.7f,
     val topP: Float = 1.0f,
     val maxTokens: Int? = null,
-    val modelId: String? = null, // 指定模型（可选）
+    val modelId: String? = null, // Specific model ID (optional)
     val createdAt: Long = System.currentTimeMillis(),
-    val isDefault: Boolean = false // 默认助手
+    val isDefault: Boolean = false // Default assistant flag
 )
 
 /**
- * 服务商实体 - 支持多个 API Provider
+ * Provider entity - Supports multiple API providers
  */
 @Serializable
 @Entity(tableName = "providers")
@@ -58,7 +58,7 @@ data class ProviderEntity(
     val name: String,
     val baseUrl: String,
     val apiKey: String,
-    val icon: String? = null, // emoji 或图片 URI
-    val isActive: Boolean = false, // 当前激活的 Provider
+    val icon: String? = null, // Emoji or image URI
+    val isActive: Boolean = false, // Currently active provider
     val createdAt: Long = System.currentTimeMillis()
 )

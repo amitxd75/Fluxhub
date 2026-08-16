@@ -5,8 +5,8 @@ data class ChatStreamSnapshot(
     val thinkingContent: String?,
     val tokenCount: Int
 ) {
-    val hasContent: Boolean = content.isNotEmpty()
-    val contentLength: Int = content.length
+    val hasContent: Boolean = content.isNotBlank() || (!thinkingContent.isNullOrBlank())
+    val contentLength: Int = content.length + (thinkingContent?.length ?: 0)
 }
 
 class ChatStreamAccumulator {
@@ -14,9 +14,21 @@ class ChatStreamAccumulator {
     private var thinkingContent = ""
     private var tokenCount = 0
     private var finished = false
+    var chunkCount = 0
+        private set
+    var lastRawData = ""
+        private set
+    var lastHttpCode: Int? = null
 
     val isFinished: Boolean
         get() = finished
+
+    fun recordEvent(rawData: String) {
+        chunkCount++
+        if (rawData.isNotBlank() && rawData != "[DONE]") {
+            lastRawData = rawData.take(300)
+        }
+    }
 
     fun applyDelta(delta: ChatStreamDelta): ChatStreamSnapshot? {
         if (finished) return null
@@ -53,5 +65,20 @@ class ChatStreamAccumulator {
             thinkingContent = thinkingContent.takeIf { it.isNotEmpty() },
             tokenCount = tokenCount
         )
+    }
+
+    fun getDebugSummary(targetUrl: String, model: String): String {
+        return buildString {
+            append("⚠️ No content returned.\n\n")
+            append("• Endpoint: $targetUrl\n")
+            append("• Model: $model\n")
+            if (lastHttpCode != null) append("• HTTP Status: $lastHttpCode\n")
+            append("• SSE Chunks Received: $chunkCount\n")
+            if (lastRawData.isNotEmpty()) {
+                append("• Last Server Payload: $lastRawData")
+            } else {
+                append("• Server closed the connection immediately without sending text tokens.")
+            }
+        }
     }
 }

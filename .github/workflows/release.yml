@@ -1,0 +1,107 @@
+name: Release & Publish Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g., v1.2.0)'
+        required: true
+        default: 'v1.2.0'
+      release_name:
+        description: 'Release Name'
+        required: false
+        default: 'FluxHub Release'
+      draft:
+        description: 'Create draft release?'
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark as pre-release?'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-release:
+    name: Build & Release APKs
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Determine Version Tag
+        id: version_step
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+            NAME="${{ github.event.inputs.release_name }}"
+          else
+            TAG="${{ github.ref_name }}"
+            NAME="FluxHub ${TAG}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: Build Debug and Release APKs
+        run: ./gradlew assembleRelease assembleDebug --no-configuration-cache --warning-mode all
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
+
+      - name: Prepare Release Artifacts
+        run: |
+          mkdir -p release_assets
+          
+          # Find and copy the release APK
+          RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -f "$RELEASE_APK" ]; then
+            cp "$RELEASE_APK" "release_assets/FluxHub-${{ steps.version_step.outputs.tag }}-release.apk"
+          fi
+          
+          # Find and copy the debug APK
+          DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -f "$DEBUG_APK" ]; then
+            cp "$DEBUG_APK" "release_assets/FluxHub-${{ steps.version_step.outputs.tag }}-debug.apk"
+          fi
+
+          # Generate SHA-256 Checksums
+          cd release_assets
+          sha256sum *.apk > checksums-sha256.txt
+          cat checksums-sha256.txt
+          cd ..
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluxhub-apks-${{ steps.version_step.outputs.tag }}
+          path: release_assets/*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version_step.outputs.tag }}
+          name: ${{ steps.version_step.outputs.name }}
+          files: release_assets/*
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

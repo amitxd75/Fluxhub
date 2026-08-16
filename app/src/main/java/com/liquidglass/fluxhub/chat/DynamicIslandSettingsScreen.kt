@@ -59,13 +59,13 @@ fun DynamicIslandSettingsScreen(
                 isInteractive = true,
                 padding = PaddingValues(0.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
             
             Spacer(Modifier.width(16.dp))
             
             Text(
-                "灵动岛设置",
+                "Dynamic Island Settings",
                 style = TextStyle(
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
@@ -77,7 +77,7 @@ fun DynamicIslandSettingsScreen(
         
         Spacer(Modifier.height(32.dp))
         
-        // 启用灵动岛
+        // Enable Dynamic Island
         SettingsCardSimple(backdrop, glassOpacity, glassBlur) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -85,9 +85,9 @@ fun DynamicIslandSettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("启用灵动岛", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Enable Dynamic Island", color = Color.White, fontWeight = FontWeight.Bold)
                     Text(
-                        "在聊天时显示灵动岛状态指示器",
+                        "Show floating status indicator during chat generation",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.6f)
                     )
@@ -102,41 +102,38 @@ fun DynamicIslandSettingsScreen(
         
         Spacer(Modifier.height(16.dp))
         
-        // 登录成功通知模式
+        // Welcome Notification Mode
         SettingsCardSimple(backdrop, glassOpacity, glassBlur) {
             Column {
                 Text(
-                    "登录成功通知",
+                    "Welcome Notification",
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "控制首页登录成功提示的显示时机",
+                    "Control when the welcome banner appears on the home screen",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.6f)
                 )
                 Spacer(Modifier.height(16.dp))
                 
-                // 选项行
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 仅登录成功后
                     ModeOption(
                         selected = viewModel.loginNotificationMode == "first",
                         onClick = { viewModel.updateLoginNotificationMode("first") },
-                        label = "仅登录成功后",
+                        label = "First Launch Only",
                         backdrop = backdrop,
                         modifier = Modifier.weight(1f)
                     )
                     
-                    // 每次进入软件
                     ModeOption(
                         selected = viewModel.loginNotificationMode == "every",
                         onClick = { viewModel.updateLoginNotificationMode("every") },
-                        label = "每次进入软件",
+                        label = "Every Launch",
                         backdrop = backdrop,
                         modifier = Modifier.weight(1f)
                     )
@@ -146,23 +143,23 @@ fun DynamicIslandSettingsScreen(
         
         Spacer(Modifier.height(16.dp))
         
-        // 显示选项
+        // Display Options
         SettingsCardSimple(backdrop, glassOpacity, glassBlur) {
             Column {
                 Text(
-                    "显示内容",
+                    "Display Information",
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(16.dp))
                 
-                // Token 计数开关
+                // Show Token Count
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("显示 Token 计数", color = Color.White)
+                    Text("Show Token Count", color = Color.White)
                     LiquidToggle(
                         selected = { viewModel.showTokenCount },
                         onSelect = { viewModel.updateShowTokenCount(it) },
@@ -172,13 +169,13 @@ fun DynamicIslandSettingsScreen(
                 
                 Spacer(Modifier.height(12.dp))
                 
-                // 耗时开关
+                // Show Elapsed Time
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("显示耗时", color = Color.White)
+                    Text("Show Elapsed Time", color = Color.White)
                     LiquidToggle(
                         selected = { viewModel.showElapsedTime },
                         onSelect = { viewModel.updateShowElapsedTime(it) },

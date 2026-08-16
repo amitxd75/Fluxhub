@@ -1,5 +1,6 @@
 package com.liquidglass.fluxhub.components
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -7,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
@@ -49,6 +51,12 @@ fun LiquidTextField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(ContinuousRoundedRectangle(20.dp))
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.22f),
+                    shape = ContinuousRoundedRectangle(20.dp)
+                )
                 .drawBackdrop(
                     backdrop = backdrop,
                     shape = { ContinuousRoundedRectangle(20.dp) },
@@ -59,7 +67,7 @@ fun LiquidTextField(
                     },
                     highlight = { Highlight.Plain },
                     onDrawSurface = {
-                        drawRect(Color.White.copy(alpha = 0.1f))
+                        drawRect(Color.White.copy(alpha = 0.12f))
                     }
                 )
                 .heightIn(min = 50.dp)
@@ -70,8 +78,8 @@ fun LiquidTextField(
                 Text(
                     text = placeholder,
                     style = TextStyle(
-                        color = Color.White.copy(alpha = 0.3f),
-                        fontSize = 16.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Normal
                     )
                 )
@@ -82,11 +90,10 @@ fun LiquidTextField(
                 onValueChange = onValueChange,
                 textStyle = TextStyle(
                     color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    shadow = Shadow(color = Color.Black.copy(alpha = 0.2f), blurRadius = 2f)
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
                 ),
-                cursorBrush = SolidColor(Color(0xFF007AFF)),
+                cursorBrush = SolidColor(Color.White),
                 visualTransformation = visualTransformation,
                 keyboardOptions = keyboardOptions,
                 singleLine = singleLine,

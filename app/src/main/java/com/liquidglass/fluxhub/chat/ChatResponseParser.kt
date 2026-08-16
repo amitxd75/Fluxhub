@@ -35,11 +35,21 @@ object ChatResponseParser {
         val firstChoice = choices?.getOrNull(0)?.jsonObject
         val messageObject = firstChoice?.get("message")?.jsonObject ?: firstChoice?.get("delta")?.jsonObject
 
-        val contentElement = messageObject?.get("content") ?: firstChoice?.get("text")
-        val content = parseContent(contentElement)
-
+        var contentElement = messageObject?.get("content") ?: firstChoice?.get("text")
         val reasoningElement = messageObject?.get("reasoning_content") ?: messageObject?.get("reasoning")
-        val reasoningContent = (reasoningElement as? JsonPrimitive)?.contentOrNull.orEmpty()
+
+        // Google Gemini native candidates format
+        if (contentElement == null) {
+            val candidates = responseJson["candidates"]?.jsonArray
+            val firstCandidate = candidates?.getOrNull(0)?.jsonObject
+            val parts = firstCandidate?.get("content")?.jsonObject?.get("parts")?.jsonArray
+            if (parts != null) {
+                contentElement = parts
+            }
+        }
+
+        val content = parseContent(contentElement)
+        val reasoningContent = parseContent(reasoningElement)
 
         return ChatCompletionResult(
             content = content,
@@ -74,10 +84,23 @@ object ChatResponseParser {
         val firstChoice = choices?.getOrNull(0)?.jsonObject
         val deltaObject = firstChoice?.get("delta")?.jsonObject ?: firstChoice?.get("message")?.jsonObject
 
-        val content = deltaObject?.get("content")?.jsonPrimitive?.contentOrNull.orEmpty()
-        val reasoningContent = deltaObject?.get("reasoning_content")?.jsonPrimitive?.contentOrNull
-            ?: deltaObject?.get("reasoning")?.jsonPrimitive?.contentOrNull
-            ?: ""
+        var contentElement = deltaObject?.get("content") ?: firstChoice?.get("text")
+        val reasoningElement = deltaObject?.get("reasoning_content")
+            ?: deltaObject?.get("reasoning")
+            ?: deltaObject?.get("thought")
+
+        // Google Gemini native candidates format in SSE chunks
+        if (contentElement == null) {
+            val candidates = chunkJson["candidates"]?.jsonArray
+            val firstCandidate = candidates?.getOrNull(0)?.jsonObject
+            val parts = firstCandidate?.get("content")?.jsonObject?.get("parts")?.jsonArray
+            if (parts != null) {
+                contentElement = parts
+            }
+        }
+
+        val content = parseContent(contentElement)
+        val reasoningContent = parseContent(reasoningElement)
 
         return ChatStreamDelta(
             content = content,
@@ -88,9 +111,21 @@ object ChatResponseParser {
     private fun parseContent(contentElement: JsonElement?): String {
         return when (contentElement) {
             is JsonPrimitive -> contentElement.contentOrNull ?: ""
-            is JsonArray -> contentElement.mapNotNull {
-                it.jsonObject["text"]?.jsonPrimitive?.contentOrNull
-            }.joinToString("")
+            is JsonArray -> contentElement.joinToString("") { item ->
+                when (item) {
+                    is JsonPrimitive -> item.contentOrNull ?: ""
+                    is JsonObject -> item["text"]?.jsonPrimitive?.contentOrNull 
+                        ?: item["content"]?.jsonPrimitive?.contentOrNull
+                        ?: item["url"]?.jsonPrimitive?.contentOrNull
+                        ?: ""
+                    else -> ""
+                }
+            }
+            is JsonObject -> {
+                contentElement["text"]?.jsonPrimitive?.contentOrNull 
+                    ?: contentElement["content"]?.jsonPrimitive?.contentOrNull
+                    ?: ""
+            }
             else -> ""
         }
     }

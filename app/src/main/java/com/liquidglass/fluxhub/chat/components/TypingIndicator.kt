@@ -22,7 +22,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.capsule.ContinuousCapsule
 
 /**
- * 打字指示器动画 - 三个脉动圆点
+ * Typing indicator animation - Three pulsating dots
  */
 @Composable
 fun TypingIndicator(backdrop: Backdrop) {

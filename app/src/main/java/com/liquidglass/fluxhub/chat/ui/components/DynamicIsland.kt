@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -49,17 +50,17 @@ enum class DynamicIslandState {
 }
 
 data class DynamicIslandData(
-    val title: String = "正在思考...",
+    val title: String = "Thinking...",
     val modelName: String? = null,
     val assistantAvatar: String? = null,
     val state: DynamicIslandState = DynamicIslandState.Hidden,
-    val tokenCount: Int = 0,          // 已生成 token 数量
-    val elapsedSeconds: Int = 0,      // 已耗时秒数
-    val isCompleted: Boolean = false, // 是否已完成（用于显示完成动画）
-    val isFailed: Boolean = false,    // 是否失败（用于显示错误动画）
-    val successMessage: String = "完成", // 成功时显示的文字
-    val showTokenCount: Boolean = true, // 是否显示 Token 计数
-    val showElapsedTime: Boolean = true, // 是否显示耗时
+    val tokenCount: Int = 0,
+    val elapsedSeconds: Int = 0,
+    val isCompleted: Boolean = false,
+    val isFailed: Boolean = false,
+    val successMessage: String = "Done",
+    val showTokenCount: Boolean = true,
+    val showElapsedTime: Boolean = true,
     val triggerId: Long = 0L
 )
 
@@ -72,25 +73,21 @@ fun DynamicIsland(
     onCollapse: () -> Unit = {},
     onLongPress: () -> Unit = {},
     onStopGeneration: () -> Unit = {},
-    onDismiss: () -> Unit = {} // Added for manual dismiss if needed
+    onDismiss: () -> Unit = {}
 ) {
-    // 是否显示（用于 AnimatedVisibility）
     val isVisible = data.state != DynamicIslandState.Hidden
     
-    // 内部状态转换动画（用于 Collapsed/Expanded/LongPressMenu 之间切换）
     val transition = updateTransition(targetState = data.state, label = "DynamicIslandTransition")
     
-    // 宽度动画 - 果冻弹簧效果
     val width by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = 0.6f, stiffness = 130f)
+            spring(dampingRatio = 0.72f, stiffness = 380f)
         },
         label = "width"
     ) { state ->
         when (state) {
-            DynamicIslandState.Hidden -> 90.dp // 初始更小
+            DynamicIslandState.Hidden -> 90.dp
             DynamicIslandState.Collapsed -> {
-                // 简单的自适应宽度：如果有 token 数或耗时，则加宽
                 if (data.showTokenCount || data.showElapsedTime) 160.dp else 120.dp
             }
             DynamicIslandState.Expanded -> 312.dp
@@ -98,112 +95,102 @@ fun DynamicIsland(
         }
     }
 
-    // 高度动画 - 恢复固定高度
     val height by transition.animateDp(
         transitionSpec = {
-            spring(dampingRatio = 0.6f, stiffness = 130f)
+            spring(dampingRatio = 0.72f, stiffness = 380f)
         },
         label = "height"
     ) { state ->
         when (state) {
             DynamicIslandState.Hidden -> 36.dp
             DynamicIslandState.Collapsed -> 36.dp
-            DynamicIslandState.Expanded -> 150.dp // 恢复固定高度
+            DynamicIslandState.Expanded -> 150.dp
             DynamicIslandState.LongPressMenu -> 160.dp
         }
     }
 
-    // 使用 AnimatedVisibility 处理进入/退出动画
     AnimatedVisibility(
         visible = isVisible,
-        modifier = modifier, // 对齐 modifier 放在这里
+        modifier = modifier,
         enter = scaleIn(
-            initialScale = 0.3f, // 从更小开始
+            initialScale = 0.5f,
             animationSpec = spring(
-                dampingRatio = 0.5f,
-                stiffness = 150f
-            ),
-            transformOrigin = TransformOrigin(0.5f, 0f) // 从顶部中心缩放
-        ) + fadeIn(animationSpec = tween(300)),
-        exit = scaleOut(
-            targetScale = 0.3f,
-            animationSpec = spring(
-                dampingRatio = 0.8f,
-                stiffness = 200f
+                dampingRatio = 0.7f,
+                stiffness = 300f
             ),
             transformOrigin = TransformOrigin(0.5f, 0f)
-        ) + fadeOut(animationSpec = tween(300))
+        ) + fadeIn(animationSpec = tween(150)),
+        exit = scaleOut(
+            targetScale = 0.5f,
+            animationSpec = spring(
+                dampingRatio = 0.8f,
+                stiffness = 300f
+            ),
+            transformOrigin = TransformOrigin(0.5f, 0f)
+        ) + fadeOut(animationSpec = tween(150))
     ) {
-        // Use key to restart everything when triggerId changes
-        key(data.triggerId) {
+        Box(
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .size(width, height)
+                .clip(RoundedCornerShape(40.dp))
+                .drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { RoundedCornerShape(40.dp) },
+                    effects = {
+                        blur(10f.dp.toPx())
+                    },
+                    onDrawSurface = {
+                        drawRect(Color(0xFF141720).copy(alpha = 0.90f))
+                    }
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.12f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(40.dp)
+                )
+                .combinedClickable(
+                    onClick = {
+                        if (data.state == DynamicIslandState.Collapsed) {
+                            onExpand()
+                        } else {
+                            onCollapse()
+                        }
+                    },
+                    onLongClick = {
+                        if (data.state == DynamicIslandState.Collapsed) {
+                            onLongPress()
+                        }
+                    }
+                )
+        ) {
+            if (data.state == DynamicIslandState.Expanded) {
+                WaveAnimationBackground()
+            }
+
             Box(
                 modifier = Modifier
-                    .padding(top = 8.dp) // 距离顶部的间距
-                    .size(width, height)
-                    .graphicsLayer { 
-                        shadowElevation = 12.dp.toPx()
-                        shape = RoundedCornerShape(40.dp)
-                        clip = true
-                    }
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { RoundedCornerShape(40.dp) },
-                        effects = {
-                            vibrancy()
-                            blur(25f.dp.toPx()) // 增加模糊度
-                        },
-                        onDrawSurface = {
-                            drawRect(Color.Black.copy(alpha = 0.5f)) // 更通透的背景
-                        }
-                    )
-                    .border(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.2f),
-                                Color.White.copy(alpha = 0.05f)
-                            )
-                        ),
-                        shape = RoundedCornerShape(40.dp)
-                    )
-                    .clip(RoundedCornerShape(40.dp))
-                    .combinedClickable(
-                        onClick = {
-                            if (data.state == DynamicIslandState.Collapsed) {
-                                onExpand()
-                            } else {
-                                onCollapse()
-                            }
-                        },
-                        onLongClick = {
-                            if (data.state == DynamicIslandState.Collapsed) {
-                                onLongPress()
-                            }
-                        }
-                    )
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // 波浪动画背景 (仅在非菜单状态且非隐藏状态显示)
-                if (data.state != DynamicIslandState.LongPressMenu) {
-                    WaveAnimationBackground()
-                }
-
-                // 内容区域
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.animation.AnimatedContent(
-                        targetState = data.state,
-                        label = "content"
-                    ) { targetState ->
-                        when (targetState) {
-                            DynamicIslandState.Collapsed -> CollapsedContent(data)
-                            DynamicIslandState.Expanded -> ExpandedContent(data)
-                            DynamicIslandState.LongPressMenu -> LongPressMenuContent(data, onStopGeneration, onCollapse, backdrop)
-                            else -> {}
-                        }
+                androidx.compose.animation.AnimatedContent(
+                    targetState = data.state,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(120)) togetherWith fadeOut(animationSpec = tween(90))
+                    },
+                    label = "content"
+                ) { targetState ->
+                    when (targetState) {
+                        DynamicIslandState.Collapsed -> CollapsedContent(data)
+                        DynamicIslandState.Expanded -> ExpandedContent(data)
+                        DynamicIslandState.LongPressMenu -> LongPressMenuContent(data, onStopGeneration, onCollapse, backdrop)
+                        else -> {}
                     }
                 }
             }
@@ -219,29 +206,26 @@ private fun CollapsedContent(data: DynamicIslandData) {
         modifier = Modifier.fillMaxSize()
     ) {
         if (data.isFailed) {
-            // 失败状态：显示动画叉叉
             AnimatedXMark(modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "失败",
+                text = "Failed",
                 style = MaterialTheme.typography.labelLarge.copy(
-                    color = Color(0xFFFF3B30), // 红色
+                    color = Color(0xFFFF3B30),
                     fontWeight = FontWeight.Bold
                 )
             )
         } else if (data.isCompleted) {
-            // 完成状态：显示动画勾
             AnimatedCheckmark(modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = data.successMessage, // 使用自定义成功消息
+                text = data.successMessage,
                 style = MaterialTheme.typography.labelLarge.copy(
-                    color = Color(0xFF34C759), // 绿色
+                    color = Color(0xFF34C759),
                     fontWeight = FontWeight.Bold
                 )
             )
         } else {
-            // 加载状态：显示旋转图标 + token数 + 耗时
             val infiniteTransition = rememberInfiniteTransition(label = "loading")
             val angle by infiniteTransition.animateFloat(
                 initialValue = 0f,
@@ -263,12 +247,11 @@ private fun CollapsedContent(data: DynamicIslandData) {
             
             Spacer(modifier = Modifier.width(6.dp))
             
-            // Token 计数（仅当启用且有数据时显示）
             if (data.showTokenCount && data.tokenCount > 0) {
                 Text(
                     text = "${data.tokenCount}",
                     style = MaterialTheme.typography.labelMedium.copy(
-                        color = Color(0xFF007AFF), // 蓝色
+                        color = Color(0xFF007AFF),
                         fontWeight = FontWeight.Bold
                     )
                 )
@@ -282,7 +265,6 @@ private fun CollapsedContent(data: DynamicIslandData) {
                 Spacer(modifier = Modifier.width(8.dp))
             }
             
-            // 耗时（仅当启用时显示）
             if (data.showElapsedTime) {
                 Text(
                     text = "${data.elapsedSeconds}s",
@@ -296,23 +278,16 @@ private fun CollapsedContent(data: DynamicIslandData) {
     }
 }
 
-/**
- * 动画勾 - 先画绿色圆圈，再画勾
- */
 @Composable
 private fun AnimatedCheckmark(modifier: Modifier = Modifier) {
-    // 圆圈绘制进度 (0 -> 1)
     val circleProgress = remember { Animatable(0f) }
-    // 勾绘制进度 (0 -> 1)
     val checkProgress = remember { Animatable(0f) }
     
     LaunchedEffect(Unit) {
-        // 先画圆圈 (500ms)
         circleProgress.animateTo(
             targetValue = 1f,
             animationSpec = tween(500, easing = FastOutSlowInEasing)
         )
-        // 再画勾 (400ms)
         checkProgress.animateTo(
             targetValue = 1f,
             animationSpec = tween(400, easing = FastOutSlowInEasing)
@@ -326,7 +301,6 @@ private fun AnimatedCheckmark(modifier: Modifier = Modifier) {
         val radius = (size.minDimension / 2) - strokeWidth
         val center = center
         
-        // 绘制圆圈 - 从顶部顺时针画
         if (circleProgress.value > 0f) {
             drawArc(
                 color = greenColor,
@@ -337,22 +311,17 @@ private fun AnimatedCheckmark(modifier: Modifier = Modifier) {
             )
         }
         
-        // 绘制勾 - 两笔画出
         if (checkProgress.value > 0f) {
             val checkPath = Path().apply {
-                // 勾的起点 (左中)
                 val startX = center.x - radius * 0.4f
                 val startY = center.y + radius * 0.1f
-                // 勾的转折点 (中下)
                 val midX = center.x - radius * 0.1f
                 val midY = center.y + radius * 0.4f
-                // 勾的终点 (右上)
                 val endX = center.x + radius * 0.5f
                 val endY = center.y - radius * 0.35f
                 
                 moveTo(startX, startY)
                 
-                // 第一笔 (0 - 0.4 进度)
                 val firstStrokeProgress = (checkProgress.value / 0.4f).coerceIn(0f, 1f)
                 if (firstStrokeProgress > 0f) {
                     lineTo(
@@ -361,7 +330,6 @@ private fun AnimatedCheckmark(modifier: Modifier = Modifier) {
                     )
                 }
                 
-                // 第二笔 (0.4 - 1.0 进度)
                 if (checkProgress.value > 0.4f) {
                     val secondStrokeProgress = ((checkProgress.value - 0.4f) / 0.6f).coerceIn(0f, 1f)
                     lineTo(
@@ -380,23 +348,16 @@ private fun AnimatedCheckmark(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * 动画叉叉 - 先画红色圆圈，再画X
- */
 @Composable
 private fun AnimatedXMark(modifier: Modifier = Modifier) {
-    // 圆圈绘制进度 (0 -> 1)
     val circleProgress = remember { Animatable(0f) }
-    // X 绘制进度 (0 -> 1)
     val xProgress = remember { Animatable(0f) }
     
     LaunchedEffect(Unit) {
-        // 先画圆圈 (500ms)
         circleProgress.animateTo(
             targetValue = 1f,
             animationSpec = tween(500, easing = FastOutSlowInEasing)
         )
-        // 再画 X (400ms)
         xProgress.animateTo(
             targetValue = 1f,
             animationSpec = tween(400, easing = FastOutSlowInEasing)
@@ -410,7 +371,6 @@ private fun AnimatedXMark(modifier: Modifier = Modifier) {
         val radius = (size.minDimension / 2) - strokeWidth
         val center = center
         
-        // 绘制圆圈 - 从顶部顺时针画
         if (circleProgress.value > 0f) {
             drawArc(
                 color = redColor,
@@ -421,11 +381,9 @@ private fun AnimatedXMark(modifier: Modifier = Modifier) {
             )
         }
         
-        // 绘制 X - 两笔画出
         if (xProgress.value > 0f) {
             val offset = radius * 0.4f
             
-            // 第一笔: 左上 -> 右下 (0 - 0.5 进度)
             val firstStrokeProgress = (xProgress.value / 0.5f).coerceIn(0f, 1f)
             if (firstStrokeProgress > 0f) {
                 val startX1 = center.x - offset
@@ -447,7 +405,6 @@ private fun AnimatedXMark(modifier: Modifier = Modifier) {
                 )
             }
             
-            // 第二笔: 右上 -> 左下 (0.5 - 1.0 进度)
             if (xProgress.value > 0.5f) {
                 val secondStrokeProgress = ((xProgress.value - 0.5f) / 0.5f).coerceIn(0f, 1f)
                 val startX2 = center.x + offset
@@ -476,13 +433,12 @@ private fun AnimatedXMark(modifier: Modifier = Modifier) {
 private fun ExpandedContent(data: DynamicIslandData) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center, // 整体垂直居中
+        verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxSize()
     ) {
-        // 顶部信息：头像和状态
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center, // 居中对齐
+            horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
@@ -491,15 +447,14 @@ private fun ExpandedContent(data: DynamicIslandData) {
                 modifier = Modifier.padding(end = 12.dp)
             )
             Column {
-                // 根据状态显示不同标题
                 val title = when {
-                    data.isFailed -> "发生错误"
+                    data.isFailed -> "Error Occurred"
                     data.isCompleted -> data.successMessage
-                    else -> "AI 正在回复"
+                    else -> "AI is responding"
                 }
                 val titleColor = when {
-                    data.isFailed -> Color(0xFFFF3B30) // 红色
-                    data.isCompleted -> Color(0xFF34C759) // 绿色
+                    data.isFailed -> Color(0xFFFF3B30)
+                    data.isCompleted -> Color(0xFF34C759)
                     else -> Color.White
                 }
                 Text(
@@ -509,7 +464,6 @@ private fun ExpandedContent(data: DynamicIslandData) {
                         fontWeight = FontWeight.Bold
                     )
                 )
-                // 仅在加载状态显示模型名称
                 if (!data.isCompleted && !data.isFailed && data.modelName != null) {
                     Text(
                         text = data.modelName,
@@ -521,7 +475,6 @@ private fun ExpandedContent(data: DynamicIslandData) {
             }
         }
         
-        // 可视化波形条 (仅加载状态显示) - 增加间距
         if (!data.isCompleted && !data.isFailed) {
             Spacer(modifier = Modifier.height(16.dp))
             ThinkingWaveform()
@@ -534,9 +487,8 @@ private fun LongPressMenuContent(
     data: DynamicIslandData,
     onStop: () -> Unit,
     onCancel: () -> Unit,
-    backdrop: Backdrop // 传入 backdrop 以创建 empty backdrop
+    backdrop: Backdrop
 ) {
-    // 创建一个不绘图的 backdrop 用于子组件
     val emptyBackdrop = rememberBackdrop(backdrop) {}
 
     Column(
@@ -544,7 +496,6 @@ private fun LongPressMenuContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxSize()
     ) {
-        // 停止生成按钮
         LiquidButton(
             onClick = {
                 onStop()
@@ -555,19 +506,18 @@ private fun LongPressMenuContent(
                 .fillMaxWidth()
                 .height(48.dp),
             isInteractive = true,
-            surfaceColor = Color(0xFFFF3B30).copy(alpha = 0.2f), // 红色背景替代 containerColor
-            tint = Color(0xFFFF453A) // 红色前景替代 contentColor
+            surfaceColor = Color(0xFFFF3B30).copy(alpha = 0.2f),
+            tint = Color(0xFFFF453A)
         ) {
            Row(verticalAlignment = Alignment.CenterVertically) {
                Icon(Lucide.Square, contentDescription = null, modifier = Modifier.size(16.dp))
                Spacer(Modifier.width(8.dp))
-               Text("停止生成", fontWeight = FontWeight.Bold)
+               Text("Stop Generation", fontWeight = FontWeight.Bold)
            }
         }
         
         Spacer(Modifier.height(8.dp))
         
-        // 取消按钮
         LiquidButton(
             onClick = onCancel,
             backdrop = emptyBackdrop,
@@ -575,10 +525,10 @@ private fun LongPressMenuContent(
                 .fillMaxWidth()
                 .height(40.dp),
             isInteractive = true,
-            surfaceColor = Color.White.copy(alpha = 0.1f), // 替代 containerColor
-            tint = Color.White // 替代 contentColor
+            surfaceColor = Color.White.copy(alpha = 0.1f),
+            tint = Color.White
         ) {
-            Text("关闭")
+            Text("Close")
         }
     }
 }
@@ -587,11 +537,9 @@ private fun LongPressMenuContent(
 private fun WaveAnimationBackground() {
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
     
-    // 自定义颜色
-    val color1 = Color(0xFF007AFF).copy(alpha = 0.15f) // 蓝色
-    val color2 = Color(0xFF5856D6).copy(alpha = 0.15f) // 紫色
+    val color1 = Color(0xFF007AFF).copy(alpha = 0.15f)
+    val color2 = Color(0xFF5856D6).copy(alpha = 0.15f)
     
-    // 波浪相位动画
     val phase1 by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 2f * PI.toFloat(),
@@ -615,10 +563,8 @@ private fun WaveAnimationBackground() {
         val height = size.height
         val centerY = height / 2
         
-        // 优化：增加步长以减少采样点 (10 -> 25)
-        val step = 25
+        val step = 50
         
-        // 绘制第一层波浪
         val path1 = Path().apply {
             moveTo(0f, centerY)
             for (x in 0..width.toInt() step step) {
@@ -632,7 +578,6 @@ private fun WaveAnimationBackground() {
         }
         drawPath(path1, color1)
         
-        // 绘制第二层波浪
         val path2 = Path().apply {
             moveTo(0f, centerY)
             for (x in 0..width.toInt() step step) {

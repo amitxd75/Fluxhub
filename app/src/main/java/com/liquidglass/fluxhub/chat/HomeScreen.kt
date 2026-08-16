@@ -1,5 +1,7 @@
 package com.liquidglass.fluxhub.chat
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -26,8 +29,10 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.capsule.ContinuousCapsule
 import com.kyant.capsule.ContinuousRoundedRectangle
 import com.liquidglass.fluxhub.components.LiquidButton
+import com.liquidglass.fluxhub.components.LiquidConfirmationDialog
 import com.liquidglass.fluxhub.components.PersonaCard
 import com.liquidglass.fluxhub.data.Personas
 import java.text.SimpleDateFormat
@@ -37,7 +42,7 @@ import com.liquidglass.fluxhub.ui.theme.GlassTypography
 import com.liquidglass.fluxhub.ui.theme.GlassTextStyles
 
 /**
- * 首页 - 增强版
+ * Home Screen
  */
 @Composable
 fun HomeScreen(
@@ -48,33 +53,26 @@ fun HomeScreen(
     onQuickPrompt: (String) -> Unit = { },
     viewModel: ChatViewModel = viewModel()
 ) {
-    // 动态字体样式
     val textStyles = GlassTextStyles.create(
         colorMode = viewModel.textColorMode,
         shadowEnabled = viewModel.textShadowEnabled
     )
     
-    // 最近对话
     val recentConversations = viewModel.conversations.take(5)
-    
-    // 列表状态 (用于滚动)
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val scope = rememberCoroutineScope()
     
-    // 时间相关
     val calendar = remember { Calendar.getInstance() }
     val hour = calendar.get(Calendar.HOUR_OF_DAY)
     val greeting = when (hour) {
-        in 5..11 -> "早上好"
-        in 12..18 -> "下午好"
-        else -> "晚上好"
+        in 5..11 -> "Good morning"
+        in 12..18 -> "Good afternoon"
+        else -> "Good evening"
     }
-    val dateFormat = SimpleDateFormat("M月d日 EEEE", Locale.CHINA)
+    val dateFormat = SimpleDateFormat("EEEE, MMMM d", Locale.ENGLISH)
     val dateString = dateFormat.format(calendar.time)
 
-    // 统计弹窗状态
     var showStatsDialog by remember { mutableStateOf(false) }
-    // 更新日志弹窗状态
     var showChangelogDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -84,7 +82,7 @@ fun HomeScreen(
             .padding(bottomPadding),
         contentPadding = PaddingValues(bottom = 100.dp)
     ) {
-        // 1. 动态问候头部 & 日期 & 版本号
+        // 1. Greeting Header & Date
         item {
             Box(
                 modifier = Modifier
@@ -92,25 +90,23 @@ fun HomeScreen(
                     .padding(horizontal = 24.dp, vertical = 32.dp)
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // 日期小标题
                     BasicText(
                         text = dateString.uppercase(),
                         style = textStyles.label
                     )
                     Spacer(Modifier.height(8.dp))
-                    // 大标题问候
                     BasicText(
                         text = greeting,
                         style = textStyles.displayLarge
                     )
                     BasicText(
-                        text = "准备好开始新的对话了吗？",
+                        text = "Ready to start a new conversation?",
                         style = textStyles.bodyLarge.copy(color = textStyles.baseColor.copy(alpha = 0.8f)),
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
                 
-                // 版本号 (右上角)
+                // Version badge (Top End)
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -124,7 +120,7 @@ fun HomeScreen(
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "v1.1.0",
+                        text = "v1.2.0",
                         style = TextStyle(
                             color = Color.White.copy(alpha = 0.8f),
                             fontSize = 12.sp,
@@ -135,7 +131,7 @@ fun HomeScreen(
             }
         }
         
-        // 2. 快捷操作网格 (Quick Actions)
+        // 2. Quick Actions Grid
         item {
             Column(
                 modifier = Modifier
@@ -146,7 +142,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 主按钮：开启新对话
+                    // Main button: New Chat
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -175,12 +171,8 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .drawBackdrop(
-                                        backdrop = backdrop,
-                                        shape = { androidx.compose.foundation.shape.CircleShape },
-                                        effects = { blur(0f) },
-                                        onDrawSurface = { drawRect(Color.White.copy(alpha = 0.2f)) }
-                                    ),
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(Color.White.copy(alpha = 0.2f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Lucide.Plus, null, tint = Color.White, modifier = Modifier.size(24.dp))
@@ -188,7 +180,7 @@ fun HomeScreen(
                             
                             Column {
                                 Text(
-                                    text = "新对话",
+                                    text = "New Chat",
                                     style = TextStyle(
                                         color = Color.White,
                                         fontSize = 18.sp,
@@ -197,7 +189,7 @@ fun HomeScreen(
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = "开启探索旅程",
+                                    text = "Begin your journey",
                                     style = TextStyle(
                                         color = Color.White.copy(alpha = 0.8f),
                                         fontSize = 13.sp
@@ -207,17 +199,17 @@ fun HomeScreen(
                         }
                     }
                     
-                    // 右侧两个小卡片
+                    // Right cards
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .height(140.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // 随机一聊
+                        // Random chat
                         QuickActionCard(
-                            title = "随机一聊",
-                            subtitle = "发现惊喜角色",
+                            title = "Random Chat",
+                            subtitle = "Discover personas",
                             icon = Lucide.Sparkles,
                             color = Color(0xFFAF52DE),
                             backdrop = backdrop,
@@ -229,7 +221,7 @@ fun HomeScreen(
                             }
                         )
                         
-                        // 今日统计
+                        // Today's Stats
                         val todayStart = remember {
                             Calendar.getInstance().apply {
                                 set(Calendar.HOUR_OF_DAY, 0)
@@ -266,7 +258,7 @@ fun HomeScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "今日统计",
+                                        text = "Activity Stats",
                                         style = TextStyle(
                                             color = Color.White,
                                             fontSize = 11.sp,
@@ -274,7 +266,7 @@ fun HomeScreen(
                                         )
                                     )
                                     Text(
-                                        text = "今日$todayConversations · 共$totalConversations",
+                                        text = "Today $todayConversations · Total $totalConversations",
                                         style = TextStyle(
                                             color = Color.White.copy(alpha = 0.8f),
                                             fontSize = 9.sp
@@ -297,10 +289,10 @@ fun HomeScreen(
         
         item { Spacer(Modifier.height(24.dp)) }
 
-        // 3. 灵动角色 (Liquid Personas) 轮播
+        // 3. Featured Personas Carousel
         item {
             Column {
-                PaddingLabel(text = "灵动角色", icon = Lucide.Sparkles)
+                PaddingLabel(text = "Featured Personas", icon = Lucide.Sparkles)
                 
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -310,6 +302,7 @@ fun HomeScreen(
                         PersonaCard(
                             persona = persona,
                             backdrop = backdrop,
+                            blurStrength = viewModel.glassBlur,
                             onClick = {
                                 viewModel.createNewConversation(persona.systemPrompt, persona.name)
                                 onNavigateToChat()
@@ -322,16 +315,16 @@ fun HomeScreen(
             Spacer(Modifier.height(24.dp))
         }
 
-        // 4. 探索 (快捷提示词)
+        // 4. Quick Prompts
         item {
             Column {
-                PaddingLabel(text = "探索更多", icon = Lucide.Zap)
+                PaddingLabel(text = "Explore Prompts", icon = Lucide.Zap)
                 
                 val prompts = listOf(
-                    "帮我写一段 Python 代码", "解释量子纠缠",
-                    "写一首关于春天的诗", "制定健身计划",
-                    "翻译这段文字", "分析这个商业案例",
-                    "推荐一部科幻电影", "如何制作拿铁咖啡"
+                    "Write a Python script to parse JSON", "Explain quantum entanglement",
+                    "Compose a poem about the spring", "Create a personalized workout plan",
+                    "Translate text naturally", "Analyze this business model",
+                    "Recommend sci-fi novels", "How to brew great espresso"
                 )
                 
                 LazyRow(
@@ -339,80 +332,143 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(prompts) { prompt ->
-                        QuickPromptChip(prompt, backdrop) { onQuickPrompt(prompt) }
+                        QuickPromptChip(
+                            text = prompt, 
+                            backdrop = backdrop,
+                            blurStrength = viewModel.glassBlur
+                        ) { 
+                            onQuickPrompt(prompt) 
+                        }
                     }
                 }
             }
             Spacer(Modifier.height(24.dp))
         }
 
-        // 5. 最近会话
+        // 5. Recent Conversations
         if (recentConversations.isNotEmpty()) {
             item {
                 Column {
-                    PaddingLabel(text = "最近会话", icon = Lucide.History)
+                    PaddingLabel(text = "Recent Chats", icon = Lucide.History)
+                    
+                    var conversationToDeleteOnHome by remember { mutableStateOf<com.liquidglass.fluxhub.data.ConversationEntity?>(null) }
+                    
+                    conversationToDeleteOnHome?.let { conv ->
+                        LiquidConfirmationDialog(
+                            onDismissRequest = { conversationToDeleteOnHome = null },
+                            onConfirm = {
+                                viewModel.deleteConversation(conv.id)
+                                conversationToDeleteOnHome = null
+                            },
+                            title = "Delete Chat",
+                            message = "Are you sure you want to delete \"${conv.title}\"? This action cannot be undone.",
+                            confirmText = "Delete",
+                            icon = Lucide.Trash2,
+                            backdrop = backdrop
+                        )
+                    }
                     
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(recentConversations) { conversation ->
+                        items(recentConversations, key = { it.id }) { conversation ->
                             Box(
                                 modifier = Modifier
-                                    .width(200.dp)
-                                    .height(110.dp)
+                                    .width(220.dp)
+                                    .height(118.dp)
+                                    .clip(ContinuousRoundedRectangle(20.dp))
+                                    .border(
+                                        width = 1.dp,
+                                        color = Color.White.copy(alpha = 0.22f),
+                                        shape = ContinuousRoundedRectangle(20.dp)
+                                    )
                                     .drawBackdrop(
                                         backdrop = backdrop,
                                         shape = { ContinuousRoundedRectangle(20.dp) },
                                         effects = {
                                             vibrancy()
-                                            blur(8.dp.toPx())
+                                            blur(viewModel.glassBlur.dp.toPx())
                                         },
                                         onDrawSurface = {
-                                            drawRect(Color.White.copy(alpha = 0.12f))
+                                            drawRect(Color.White.copy(alpha = 0.14f))
                                         }
                                     )
                                     .clickable {
                                         viewModel.switchConversation(conversation.id)
                                         onNavigateToChat()
                                     }
-                                    .padding(16.dp)
+                                    .padding(14.dp)
                             ) {
                                 Column(
                                     modifier = Modifier.fillMaxSize(),
                                     verticalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Lucide.MessageCircle, 
-                                            null, 
-                                            tint = Color.White.copy(alpha = 0.7f),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        val timeDiff = System.currentTimeMillis() - conversation.updatedAt
-                                        val timeText = when {
-                                            timeDiff < 60000 -> "刚刚"
-                                            timeDiff < 3600000 -> "${timeDiff / 60000}分钟前"
-                                            timeDiff < 86400000 -> "${timeDiff / 3600000}小时前"
-                                            else -> "${timeDiff / 86400000}天前"
-                                        }
-                                        Text(
-                                            text = timeText,
-                                            style = TextStyle(
-                                                color = Color.White.copy(alpha = 0.5f),
-                                                fontSize = 11.sp
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(28.dp)
+                                                    .clip(ContinuousCapsule)
+                                                    .background(Color(0xFF007AFF).copy(alpha = 0.35f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    Lucide.MessageCircle, 
+                                                    null, 
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                            val timeDiff = System.currentTimeMillis() - conversation.updatedAt
+                                            val timeText = when {
+                                                timeDiff < 60000 -> "Just now"
+                                                timeDiff < 3600000 -> "${timeDiff / 60000}m ago"
+                                                timeDiff < 86400000 -> "${timeDiff / 3600000}h ago"
+                                                else -> "${timeDiff / 86400000}d ago"
+                                            }
+                                            Text(
+                                                text = timeText,
+                                                style = TextStyle(
+                                                    color = Color.White.copy(alpha = 0.6f),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
                                             )
-                                        )
+                                        }
+                                        
+                                        // Delete Button on Recent Chat Card
+                                        Box(
+                                            modifier = Modifier
+                                                .size(26.dp)
+                                                .clip(ContinuousCapsule)
+                                                .background(Color.White.copy(alpha = 0.12f))
+                                                .clickable { conversationToDeleteOnHome = conversation },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.Trash2,
+                                                contentDescription = "Delete",
+                                                tint = Color.White.copy(alpha = 0.7f),
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        }
                                     }
                                     
                                     Text(
                                         text = conversation.title,
                                         style = TextStyle(
                                             color = Color.White,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 3f)
                                         ),
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
@@ -426,7 +482,7 @@ fun HomeScreen(
         }
     }
 
-    // 统计弹窗
+    // Stats Dialog
     if (showStatsDialog) {
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { showStatsDialog = false }
@@ -453,7 +509,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     Text(
-                        "我的数据",
+                        "My Statistics",
                         style = TextStyle(
                             color = Color.White,
                             fontSize = 18.sp,
@@ -461,7 +517,6 @@ fun HomeScreen(
                         )
                     )
                     
-                    // 统计概览圆环（显示今日判比例）
                     val todayStart = remember {
                         Calendar.getInstance().apply {
                             set(Calendar.HOUR_OF_DAY, 0)
@@ -492,7 +547,7 @@ fun HomeScreen(
                                 )
                             )
                             Text(
-                                "今日会话",
+                                "Today's Chats",
                                 style = TextStyle(
                                     color = Color.White.copy(0.6f),
                                     fontSize = 10.sp
@@ -505,14 +560,14 @@ fun HomeScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             StatCard(
                                 icon = Lucide.MessageCircle,
-                                label = "总会话",
+                                label = "Total Chats",
                                 value = "$totalCount",
                                 backdrop = backdrop,
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 icon = Lucide.Zap,
-                                label = "今日互动",
+                                label = "Today's Activity",
                                 value = "$todayCount",
                                 backdrop = backdrop,
                                 modifier = Modifier.weight(1f)
@@ -521,15 +576,15 @@ fun HomeScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             StatCard(
                                 icon = Lucide.Bot,
-                                label = "当前大脑",
+                                label = "Current Model",
                                 value = viewModel.model.ifBlank { "AUTO" }.uppercase().take(6),
                                 backdrop = backdrop,
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 icon = Lucide.Award,
-                                label = "探索成就",
-                                value = "初级向导",
+                                label = "Exploration",
+                                value = "Explorer",
                                 backdrop = backdrop,
                                 modifier = Modifier.weight(1f)
                             )
@@ -543,14 +598,14 @@ fun HomeScreen(
                         isInteractive = true,
                         tint = Color(0xFF007AFF).copy(0.8f)
                     ) {
-                        Text("关闭", color = Color.White, fontWeight = FontWeight.Medium)
+                        Text("Close", color = Color.White, fontWeight = FontWeight.Medium)
                     }
                 }
             }
         }
     }
 
-    // 更新日志弹窗
+    // Changelog Dialog
     if (showChangelogDialog) {
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { showChangelogDialog = false }
@@ -578,15 +633,15 @@ fun HomeScreen(
                 ) {
                     Column {
                         Text(
-                            "版本更新 v1.1.0",
+                            "Release Notes v1.2.0",
                             style = TextStyle(
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
+                                 color = Color.White,
+                                 fontSize = 18.sp,
+                                 fontWeight = FontWeight.Bold
                             )
                         )
                         Text(
-                            "2026-01-22",
+                            "2026-08-16",
                             style = TextStyle(
                                 color = Color.White.copy(0.5f),
                                 fontSize = 12.sp
@@ -596,10 +651,10 @@ fun HomeScreen(
                     
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         val updates = listOf(
-                            "✨ 新增：灵动岛功能，实时显示 AI 状态",
-                            "🔐 新增：用户认证与账户系统",
-                            "🎨 优化：移除不透明度设置，简化显示选项",
-                            "⚡ 性能提升：优化启动速度与内存占用"
+                            "🧠 New: 5-level unified Thinking Mode with Auto reasoning effort",
+                            "🎛️ New: Liquid Glass blur strength & hardness slider with presets",
+                            "⚡ Performance: 60-120 FPS high-speed conversation drawer and smooth typing",
+                            "🎨 Polished: Redesigned chat options toolbox and frosted history cards"
                         )
                         updates.forEach { update ->
                             Row(verticalAlignment = Alignment.Top) {
@@ -626,7 +681,7 @@ fun HomeScreen(
                         isInteractive = true,
                         tint = Color(0xFF007AFF).copy(0.8f)
                     ) {
-                        Text("关闭", color = Color.White, fontWeight = FontWeight.Medium)
+                        Text("Close", color = Color.White, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -706,7 +761,6 @@ private fun QuickActionCard(
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        // 水平布局：图标在左，文字在右
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
@@ -761,19 +815,40 @@ private fun PaddingLabel(text: String, icon: androidx.compose.ui.graphics.vector
 }
 
 @Composable
-private fun QuickPromptChip(text: String, backdrop: Backdrop, onClick: () -> Unit) {
-    LiquidButton(
-        onClick = onClick,
-        backdrop = backdrop,
-        shape = { ContinuousRoundedRectangle(12.dp) },
-        tint = Color.White.copy(alpha = 0.1f),
-        padding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+private fun QuickPromptChip(
+    text: String, 
+    backdrop: Backdrop, 
+    blurStrength: Float = 16f,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(ContinuousRoundedRectangle(14.dp))
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.22f),
+                shape = ContinuousRoundedRectangle(14.dp)
+            )
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = { ContinuousRoundedRectangle(14.dp) },
+                effects = {
+                    vibrancy()
+                    blur(blurStrength.dp.toPx())
+                },
+                onDrawSurface = {
+                    drawRect(Color.White.copy(alpha = 0.12f))
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         BasicText(
             text = text,
             style = TextStyle(
                 fontSize = 13.sp,
                 color = Color.White,
+                fontWeight = FontWeight.Medium,
                 shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 3f)
             )
         )

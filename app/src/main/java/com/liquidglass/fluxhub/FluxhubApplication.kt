@@ -10,8 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * 自定义 Application 类
- * 用于在应用启动时预热 Compose 运行时，减少首次页面切换的卡顿
+ * Custom Application class
+ * Pre-warms Compose runtime classes on launch to minimize frame drops on initial page navigation.
  */
 class FluxhubApplication : Application() {
     
@@ -22,12 +22,10 @@ class FluxhubApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         
-        // 在后台线程预热 Compose 运行时
-        // 这会触发 Compose 编译器的初始化，减少首次渲染时的卡顿
+        // Prewarm Compose runtime classes on background thread
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                // 预热 Compose 内部状态
-                // 这里不需要实际渲染任何内容，只需要触发 Compose 的类加载
+                // Trigger class loading for essential Compose components
                 Class.forName("androidx.compose.runtime.ComposerKt")
                 Class.forName("androidx.compose.ui.platform.AndroidComposeView")
                 Class.forName("androidx.compose.foundation.layout.BoxKt")

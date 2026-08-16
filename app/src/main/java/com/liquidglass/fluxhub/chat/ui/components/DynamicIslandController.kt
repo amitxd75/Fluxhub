@@ -12,16 +12,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * 全局灵动岛控制器
- * 单例对象，可从应用任何地方触发灵动岛通知
+ * Global Dynamic Island Controller
+ * Singleton object to trigger dynamic island notifications across the app.
  */
 object DynamicIslandController {
     
-    // ========== 状态 ==========
+    // ========== State ==========
     var state by mutableStateOf(DynamicIslandState.Hidden)
         private set
     
-    var title by mutableStateOf("正在思考...")
+    var title by mutableStateOf("Thinking...")
         private set
     
     var modelName by mutableStateOf<String?>(null)
@@ -42,30 +42,30 @@ object DynamicIslandController {
     var isFailed by mutableStateOf(false)
         private set
     
-    var successMessage by mutableStateOf("完成")
+    var successMessage by mutableStateOf("Done")
         private set
 
     var triggerId by mutableStateOf(0L)
         private set
     
-    // ========== 设置（从 ViewModel 同步）==========
+    // ========== Settings (synced from ViewModel) ==========
     var isEnabled by mutableStateOf(true)
     var showTokenCountEnabled by mutableStateOf(true)
     var showElapsedTimeEnabled by mutableStateOf(true)
     var loginNotificationMode by mutableStateOf("first")
     
-    // ========== 内部状态 ==========
+    // ========== Internal State ==========
     private var timerJob: Job? = null
     private var autoHideJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main)
     
-    // ========== 公共 API ==========
+    // ========== Public API ==========
     
     /**
-     * 显示加载状态（用于 AI 生成等）
+     * Show loading state (e.g. for AI generation)
      */
     fun showLoading(
-        title: String = "正在思考...",
+        title: String = "Thinking...",
         modelName: String? = null,
         avatar: String? = null
     ) {
@@ -81,29 +81,28 @@ object DynamicIslandController {
         this.elapsedSeconds = 0
         this.state = DynamicIslandState.Collapsed
         
-        // 启动计时器
         startTimer()
     }
     
     /**
-     * 更新 Token 计数
+     * Update Token Count
      */
     fun updateTokenCount(count: Int) {
         this.tokenCount = count
     }
     
     /**
-     * 增加 Token 计数
+     * Increment Token Count
      */
     fun incrementTokenCount(delta: Int = 1) {
         this.tokenCount += delta
     }
     
     /**
-     * 显示成功状态
+     * Show success state
      */
     fun showSuccess(
-        message: String = "完成",
+        message: String = "Done",
         autoHideDelayMs: Long = 3500,
         avatar: String? = null,
         customTitle: String? = null
@@ -115,20 +114,18 @@ object DynamicIslandController {
         this.successMessage = message
         this.isCompleted = true
         this.isFailed = false
-        // 设置自定义头像和标题（用于登录通知等）
         if (avatar != null) this.assistantAvatar = avatar
         if (customTitle != null) this.title = customTitle
-        this.modelName = null // 清空模型名称
+        this.modelName = null
         this.state = DynamicIslandState.Collapsed
         
-        // 自动隐藏
         scheduleAutoHide(autoHideDelayMs)
     }
     
     /**
-     * 显示错误状态
+     * Show error state
      */
-    fun showError(message: String = "失败", autoHideDelayMs: Long = 3500) {
+    fun showError(message: String = "Failed", autoHideDelayMs: Long = 3500) {
         if (!isEnabled) return
         
         triggerId++
@@ -138,22 +135,20 @@ object DynamicIslandController {
         this.isFailed = true
         this.state = DynamicIslandState.Collapsed
         
-        // 自动隐藏
         scheduleAutoHide(autoHideDelayMs)
     }
     
     /**
-     * 隐藏灵动岛
+     * Hide Dynamic Island
      */
     fun hide() {
         stopTimer()
-        scheduleAutoHide(0) // 确保取消任何 pending 的自动隐藏任务
-        // 不要在这里重置 isCompleted/isFailed，否则退出动画还没结束时 UI 会闪回默认状态
+        scheduleAutoHide(0)
         this.state = DynamicIslandState.Hidden
     }
     
     /**
-     * 展开灵动岛（显示详情）
+     * Expand Dynamic Island to show details
      */
     fun expand() {
         if (state != DynamicIslandState.Hidden) {
@@ -162,7 +157,7 @@ object DynamicIslandController {
     }
     
     /**
-     * 收起灵动岛
+     * Collapse Dynamic Island
      */
     fun collapse() {
         if (state != DynamicIslandState.Hidden) {
@@ -171,7 +166,7 @@ object DynamicIslandController {
     }
     
     /**
-     * 显示长按菜单
+     * Show long press menu
      */
     fun showLongPressMenu() {
         if (state != DynamicIslandState.Hidden) {
@@ -179,7 +174,7 @@ object DynamicIslandController {
         }
     }
     
-    // ========== 内部方法 ==========
+    // ========== Internal Methods ==========
     
     private fun startTimer() {
         timerJob?.cancel()
@@ -206,7 +201,7 @@ object DynamicIslandController {
     }
     
     /**
-     * 生成当前状态的 DynamicIslandData
+     * Generate DynamicIslandData representing current state
      */
     fun toData(): DynamicIslandData {
         return DynamicIslandData(

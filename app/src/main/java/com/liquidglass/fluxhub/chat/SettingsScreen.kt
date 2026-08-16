@@ -38,7 +38,7 @@ import com.liquidglass.fluxhub.ui.theme.GlassTypography
 import com.liquidglass.fluxhub.ui.theme.GlassTextStyles
 
 /**
- * 设置主页面 - 分类入口 (重构版)
+ * Settings Screen
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +56,6 @@ fun SettingsScreen(
     val glassOpacity = viewModel.glassOpacity
     val glassBlur = viewModel.glassBlur
     
-    // 动态字体样式
     val textStyles = GlassTextStyles.create(
         colorMode = viewModel.textColorMode,
         shadowEnabled = viewModel.textShadowEnabled
@@ -66,7 +65,6 @@ fun SettingsScreen(
     var showModelDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
     
-    // 备份相关 Launcher
     val context = androidx.compose.ui.platform.LocalContext.current
     
     fun saveToFile(uri: android.net.Uri, content: String) {
@@ -94,10 +92,9 @@ fun SettingsScreen(
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { viewModel.importData(it) { success -> /* Toast? */ } }
+        uri?.let { viewModel.importData(it) { success -> } }
     }
     
-    // Main Content
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,14 +116,14 @@ fun SettingsScreen(
                     isInteractive = true,
                     padding = PaddingValues(0.dp)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                 }
                 Spacer(Modifier.width(16.dp))
-                SettingsTitle("设置", textStyles)
+                SettingsTitle("Settings", textStyles)
             }
         } else {
              Box(modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp)) {
-                 SettingsTitle("设置", textStyles)
+                 SettingsTitle("Settings", textStyles)
              }
         }
         
@@ -138,13 +135,13 @@ fun SettingsScreen(
         ) {
             // Group 1: AI Config
             item {
-                SettingsGroup(title = "智能配置", textStyles = textStyles) {
+                SettingsGroup(title = "AI Configuration", textStyles = textStyles) {
                     SettingsCategoryItem(
                         icon = Lucide.User,
                         iconColor = Color.White,
-                        iconBgColor = Color(0xFF007AFF), // Blue
-                        title = "助手管理",
-                        subtitle = "管理您的 AI 角色与预设",
+                        iconBgColor = Color(0xFF007AFF),
+                        title = "Assistant Management",
+                        subtitle = "Manage your AI personas and presets",
                         badge = if (viewModel.assistants.isNotEmpty()) "${viewModel.assistants.size}" else null,
                         backdrop = backdrop,
                         isFirst = true,
@@ -153,9 +150,9 @@ fun SettingsScreen(
                     SettingsCategoryItem(
                         icon = Lucide.Key,
                         iconColor = Color.White,
-                        iconBgColor = Color(0xFFFF9500), // Orange
-                        title = "服务商管理",
-                        subtitle = "配置 API Key 与模型端点",
+                        iconBgColor = Color(0xFFFF9500),
+                        title = "Provider Management",
+                        subtitle = "Configure API keys and model endpoints",
                         badge = if (viewModel.providers.isNotEmpty()) "${viewModel.providers.size}" else null,
                         backdrop = backdrop,
                         onClick = onNavigateToProviders
@@ -163,9 +160,9 @@ fun SettingsScreen(
                     SettingsCategoryItem(
                         icon = Lucide.Zap,
                         iconColor = Color.White,
-                        iconBgColor = Color(0xFFFF2D55), // Pink
-                        title = "默认模型",
-                        subtitle = if (viewModel.defaultModel.isNotBlank()) viewModel.defaultModel else "使用当前配置",
+                        iconBgColor = Color(0xFFFF2D55),
+                        title = "Default Model",
+                        subtitle = if (viewModel.defaultModel.isNotBlank()) viewModel.defaultModel else "Use active config",
                         backdrop = backdrop,
                         isLast = true,
                         onClick = { showModelDialog = true }
@@ -175,13 +172,13 @@ fun SettingsScreen(
             
             // Group 2: Data & Storage
             item {
-                SettingsGroup(title = "数据与存储", textStyles = textStyles) {
+                SettingsGroup(title = "Data & Storage", textStyles = textStyles) {
                     SettingsCategoryItem(
                         icon = Lucide.Save,
                         iconColor = Color.White,
-                        iconBgColor = Color(0xFF5856D6), // Indigo
-                        title = "数据备份与恢复",
-                        subtitle = "导出或导入聊天记录",
+                        iconBgColor = Color(0xFF5856D6),
+                        title = "Backup & Restore",
+                        subtitle = "Export or import chat history and settings",
                         backdrop = backdrop,
                         isFirst = true,
                         isLast = true,
@@ -192,13 +189,13 @@ fun SettingsScreen(
             
             // Group 3: Appearance
             item {
-                SettingsGroup(title = "个性化", textStyles = textStyles) {
+                SettingsGroup(title = "Personalization", textStyles = textStyles) {
                     SettingsCategoryItem(
                         icon = Lucide.Palette,
                         iconColor = Color.White,
-                        iconBgColor = Color(0xFF34C759), // Green
-                        title = "显示设置",
-                        subtitle = "壁纸、毛玻璃效果强度",
+                        iconBgColor = Color(0xFF34C759),
+                        title = "Display Settings",
+                        subtitle = "Wallpaper, glass blur and styling",
                         backdrop = backdrop,
                         isFirst = true,
                         onClick = onNavigateToDisplay
@@ -206,9 +203,9 @@ fun SettingsScreen(
                     SettingsCategoryItem(
                         icon = Lucide.Zap,
                         iconColor = Color.White,
-                        iconBgColor = Color(0xFF5856D6), // Indigo
-                        title = "灵动岛设置",
-                        subtitle = "状态通知与动画效果",
+                        iconBgColor = Color(0xFF5856D6),
+                        title = "Dynamic Island Settings",
+                        subtitle = "Status alerts and animations",
                         backdrop = backdrop,
                         isLast = true,
                         onClick = onNavigateToDynamicIsland
@@ -218,13 +215,13 @@ fun SettingsScreen(
 
             // Group 4: About
             item {
-                SettingsGroup(title = "其他", textStyles = textStyles) {
+                SettingsGroup(title = "About", textStyles = textStyles) {
                     SettingsCategoryItem(
                         icon = Lucide.Info,
                         iconColor = Color.White,
-                        iconBgColor = Color(0xFFAF52DE), // Purple
-                        title = "关于 FluxHub",
-                        subtitle = "版本与开发者信息",
+                        iconBgColor = Color(0xFFAF52DE),
+                        title = "About FluxHub",
+                        subtitle = "Version and developer info",
                         backdrop = backdrop,
                         isFirst = true,
                         isLast = true,
@@ -234,8 +231,6 @@ fun SettingsScreen(
             }
         }
     }
-    
-    // Dialogs (Overlays)
     
     // About Dialog
     if (showAboutDialog) {
@@ -257,7 +252,6 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Logo 区域
                     Box(
                         modifier = Modifier
                             .size(80.dp)
@@ -283,7 +277,7 @@ fun SettingsScreen(
                             )
                         )
                         Text(
-                            "v1.1.0 · Liquid Glass",
+                            "v1.2.0 · Liquid Glass",
                             fontSize = 13.sp,
                             color = Color.White.copy(alpha = 0.6f),
                             fontWeight = FontWeight.Medium
@@ -293,7 +287,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                     
                     Text(
-                        "一款基于 Liquid Glass 设计语言的 AI 聊天应用，为您带来沉浸式的对话体验。",
+                        "An AI conversational client crafted with the Liquid Glass design language, delivering an immersive chat experience.",
                         fontSize = 14.sp,
                         color = Color.White.copy(alpha = 0.8f),
                         modifier = Modifier.padding(horizontal = 8.dp),
@@ -313,7 +307,7 @@ fun SettingsScreen(
                         tint = Color(0xFF007AFF)
                     ) {
                         Text(
-                            "关闭",
+                            "Close",
                             color = Color.White,
                             fontWeight = FontWeight.Bold
                         )
@@ -339,7 +333,7 @@ fun SettingsScreen(
                     .padding(24.dp)
             ) {
                 Column {
-                    Text("默认模型", style = textStyles.titleMedium, color = Color.White)
+                    Text("Default Model", style = textStyles.titleMedium, color = Color.White)
                     Spacer(Modifier.height(16.dp))
                     LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
                         items(viewModel.availableModels.size) { index ->
@@ -364,7 +358,7 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.height(16.dp))
                     LiquidButton(onClick = { showModelDialog = false }, backdrop = backdrop, modifier = Modifier.fillMaxWidth().height(48.dp), isInteractive = true) {
-                        Text("关闭", color = Color.White)
+                        Text("Close", color = Color.White)
                     }
                 }
             }
@@ -387,9 +381,9 @@ fun SettingsScreen(
                     .padding(24.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("数据备份", style = textStyles.titleMedium, color = Color.White)
+                    Text("Data Backup", style = textStyles.titleMedium, color = Color.White)
                     Spacer(Modifier.height(8.dp))
-                    Text("备份或恢复所有聊天记录和设置。", style = textStyles.bodyMedium, color = Color.White.copy(0.7f))
+                    Text("Backup or restore all conversation histories and settings.", style = textStyles.bodyMedium, color = Color.White.copy(0.7f))
                     Spacer(Modifier.height(24.dp))
                     
                     LiquidButton(
@@ -404,7 +398,7 @@ fun SettingsScreen(
                     ) {
                         Icon(Lucide.Save, null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("导出备份", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Export Backup", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                     
                     Spacer(Modifier.height(16.dp))
@@ -421,11 +415,11 @@ fun SettingsScreen(
                     ) {
                         Icon(Lucide.Zap, null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("导入恢复", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Import Backup", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                     
                     Spacer(Modifier.height(16.dp))
-                    Text("导入将覆盖现有数据", style = textStyles.caption, color = Color.White.copy(0.4f))
+                    Text("Importing will replace existing local data", style = textStyles.caption, color = Color.White.copy(0.4f))
                 }
             }
         }
@@ -477,8 +471,6 @@ private fun SettingsCategoryItem(
         isLast -> androidx.compose.foundation.shape.RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
         else -> androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
     }
-    
-    val bottomSpacer = if (isLast) 0.dp else 1.dp
 
     Column {
         Box(
@@ -497,14 +489,13 @@ private fun SettingsCategoryItem(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Colored Icon Container
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .drawBackdrop(
                             backdrop = backdrop,
                             shape = { ContinuousRoundedRectangle(10.dp) },
-                            effects = { blur(0f) }, // Solid color usually
+                            effects = { blur(0f) },
                             onDrawSurface = { drawRect(iconBgColor) }
                         ),
                     contentAlignment = Alignment.Center
@@ -514,7 +505,6 @@ private fun SettingsCategoryItem(
                 
                 Spacer(Modifier.width(16.dp))
                 
-                // Texts
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = title,
@@ -534,7 +524,6 @@ private fun SettingsCategoryItem(
                     )
                 }
                 
-                // Badge
                 if (badge != null) {
                     Box(
                         modifier = Modifier
@@ -558,7 +547,6 @@ private fun SettingsCategoryItem(
                     Spacer(Modifier.width(8.dp))
                 }
                 
-                // Chevron
                 Icon(
                     Lucide.ChevronRight,
                     contentDescription = null,

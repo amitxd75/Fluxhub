@@ -95,12 +95,12 @@ fun LiquidButton(
                     null
                 },
                 onDrawSurface = {
-                    if (tint.isSpecified) {
-                        drawRect(tint, blendMode = BlendMode.Hue)
-                        drawRect(tint.copy(alpha = 0.75f))
-                    }
                     if (surfaceColor.isSpecified) {
                         drawRect(surfaceColor)
+                    } else if (tint.isSpecified) {
+                        drawRect(tint)
+                    } else {
+                        drawRect(Color.White.copy(alpha = 0.12f))
                     }
                 }
             )

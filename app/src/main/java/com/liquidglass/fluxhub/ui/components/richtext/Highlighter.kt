@@ -25,19 +25,23 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class Highlighter(ctx: Context) {
+class Highlighter private constructor(ctx: Context) {
+    private val appContext = ctx.applicationContext
     private val executor = Executors.newSingleThreadExecutor()
 
     init {
         executor.submit {
-            QuickJSLoader.init()
-            // 访问 lazy 属性以确保在后台线程初始化
-            highlightFn
+            try {
+                QuickJSLoader.init()
+                highlightFn
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     private val script: String by lazy {
-        ctx.resources.openRawResource(R.raw.prism).use {
+        appContext.resources.openRawResource(R.raw.prism).use {
             it.bufferedReader().readText()
         }
     }
@@ -50,6 +54,17 @@ class Highlighter(ctx: Context) {
 
     private val highlightFn by lazy {
         context.globalObject.getJSFunction("highlight")
+    }
+
+    companion object {
+        @Volatile
+        private var instance: Highlighter? = null
+
+        fun getInstance(context: Context): Highlighter {
+            return instance ?: synchronized(this) {
+                instance ?: Highlighter(context.applicationContext).also { instance = it }
+            }
+        }
     }
 
     suspend fun highlight(code: String, language: String): List<HighlightToken> =

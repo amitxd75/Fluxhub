@@ -33,8 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 /**
- * 思考过程展示组件
- * 参考 RikkaHub 的 ChatMessageReasoning 实现
+ * Thinking/Reasoning process component
  */
 @Composable
 fun ThinkingComponent(
@@ -45,15 +44,15 @@ fun ThinkingComponent(
     startTime: Long = remember { System.currentTimeMillis() },
     modifier: Modifier = Modifier
 ) {
-    // 折叠状态：如果 shouldCollapse 且不在思考中，初始化为折叠
+    // Collapse state
     var expanded by remember(shouldCollapse, isThinking) { 
         mutableStateOf(!shouldCollapse || isThinking) 
     }
     
-    // 思考计时器
+    // Thinking timer
     var duration by remember { mutableStateOf(0L) }
     
-    // 实时更新计时器
+    // Real-time timer update
     LaunchedEffect(isThinking) {
         if (isThinking) {
             while (isActive) {
@@ -63,7 +62,7 @@ fun ThinkingComponent(
         }
     }
     
-    // 自动折叠逻辑
+    // Auto-collapse logic
     LaunchedEffect(shouldCollapse, isThinking) {
         if (shouldCollapse && !isThinking) {
             delay(800)
@@ -71,7 +70,7 @@ fun ThinkingComponent(
         }
     }
     
-    // Shimmer 动画 (仅在思考时运行)
+    // Shimmer animation while thinking
     val shimmerAlpha = if (isThinking) {
         val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
         infiniteTransition.animateFloat(
@@ -87,7 +86,7 @@ fun ThinkingComponent(
         0.6f
     }
     
-    // 格式化时长
+    // Formatted elapsed duration
     val durationText = remember(duration) {
         if (duration > 0) {
             val seconds = duration / 1000.0
@@ -100,12 +99,12 @@ fun ThinkingComponent(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .background(
-                color = Color(0xFFE3F2FD), // Light Blue
+                color = Color.White.copy(alpha = 0.08f),
                 shape = RoundedCornerShape(16.dp)
             )
             .border(
                 width = 1.dp,
-                color = Color(0xFF2196F3).copy(alpha = 0.3f), // Blue border
+                color = Color.White.copy(alpha = 0.16f),
                 shape = RoundedCornerShape(16.dp)
             )
             .padding(12.dp)
@@ -127,14 +126,14 @@ fun ThinkingComponent(
                     modifier = Modifier
                         .size(14.dp)
                         .alpha(shimmerAlpha),
-                    tint = Color(0xFF1976D2) // Dark Blue
+                    tint = Color(0xFF007AFF)
                 )
                 
                 Text(
-                    text = if (isThinking) "思考中..." else "已思考",
+                    text = if (isThinking) "Thinking..." else "Thought process",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.Black.copy(alpha = shimmerAlpha),
+                    color = Color.White.copy(alpha = shimmerAlpha),
                     letterSpacing = 0.5.sp
                 )
                 
@@ -143,31 +142,22 @@ fun ThinkingComponent(
                         text = durationText,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color.Black.copy(alpha = if (isThinking) shimmerAlpha * 0.7f else 0.5f)
+                        color = Color.White.copy(alpha = if (isThinking) shimmerAlpha * 0.7f else 0.5f)
                     )
                 }
             }
             
             Icon(
                 imageVector = if (expanded) Lucide.ChevronUp else Lucide.ChevronDown,
-                contentDescription = if (expanded) "收起" else "展开",
+                contentDescription = if (expanded) "Collapse" else "Expand",
                 modifier = Modifier.size(14.dp),
-                tint = Color.Black.copy(alpha = 0.4f)
+                tint = Color.White.copy(alpha = 0.6f)
             )
         }
 
-        // 使用简单的 if 替代 AnimatedVisibility 以减少动画开销
         if (expanded) {
             val scrollState = rememberScrollState()
             
-            // 内部自动滚动 (仅当 Thinking 在进行时)
-            LaunchedEffect(content.length, isThinking) {
-                if (isThinking) {
-                    scrollState.animateScrollTo(scrollState.maxValue)
-                }
-            }
-            
-            // 阻止嵌套滚动传播到父容器 (LazyColumn)
             val nestedScrollConnection = remember {
                 object : NestedScrollConnection {
                     override fun onPostScroll(
@@ -175,7 +165,6 @@ fun ThinkingComponent(
                         available: Offset,
                         source: NestedScrollSource
                     ): Offset {
-                        // 消费所有剩余的滚动量，防止传播给父级
                         return available
                     }
                 }
@@ -186,16 +175,15 @@ fun ThinkingComponent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        // 恢复最大高度限制，形成嵌套滚动
                         .heightIn(max = 240.dp)
                         .nestedScroll(nestedScrollConnection)
                         .verticalScroll(scrollState)
-                        .graphicsLayer() // 开启硬件加速图层，优化滚动性能
+                        .graphicsLayer()
                 ) {
                     MarkdownBlock(
                         content = content,
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color(0xFF333333).copy(alpha = 0.8f),
+                            color = Color.White.copy(alpha = 0.75f),
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic

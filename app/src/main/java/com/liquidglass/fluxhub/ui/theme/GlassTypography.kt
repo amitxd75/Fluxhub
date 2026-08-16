@@ -12,21 +12,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * 当前活跃的字体样式
- * 通过 CompositionLocal 在整个应用中传递
+ * Currently active typography styles passed down via CompositionLocal
  */
 val LocalGlassTextStyles = compositionLocalOf { GlassTextStyles.default() }
 
 /**
- * 提供动态字体样式的包装器
- * 
- * 使用方法：
- * ```
- * ProvideGlassTextStyles(colorMode = "white", shadowEnabled = true) {
- *     // 子组件中使用
- *     Text("标题", style = LocalGlassTextStyles.current.title)
- * }
- * ```
+ * Dynamic glass typography provider wrapper
  */
 @Composable
 fun ProvideGlassTextStyles(
@@ -41,7 +32,7 @@ fun ProvideGlassTextStyles(
 }
 
 /**
- * 动态生成的字体样式集合
+ * Dynamically generated typography style collection
  */
 data class GlassTextStyles(
     val baseColor: Color,
@@ -64,7 +55,7 @@ data class GlassTextStyles(
         } else null
     }
     
-    // ============== 标题样式 ==============
+    // ============== Headline / Title Styles ==============
     
     val displayLarge: TextStyle get() = TextStyle(
         fontSize = 36.sp,
@@ -94,7 +85,7 @@ data class GlassTextStyles(
         shadow = shadow(0.5f, 5f, Offset(0f, 1f))
     )
     
-    // ============== 正文样式 ==============
+    // ============== Body Styles ==============
     
     val body: TextStyle get() = TextStyle(
         fontSize = 14.sp,
@@ -117,7 +108,7 @@ data class GlassTextStyles(
         shadow = shadow(0.5f, 4f)
     )
     
-    // ============== 辅助样式 ==============
+    // ============== Auxiliary Styles ==============
     
     val label: TextStyle get() = TextStyle(
         fontSize = 13.sp,
@@ -148,7 +139,7 @@ data class GlassTextStyles(
         shadow = shadow(0.3f, 2f)
     )
     
-    // ============== 按钮样式 ==============
+    // ============== Button Styles ==============
     
     val button: TextStyle get() = TextStyle(
         fontSize = 15.sp,
@@ -164,27 +155,27 @@ data class GlassTextStyles(
         shadow = shadow(0.4f, 3f)
     )
     
-    // ============== 导航栏样式 ==============
+    // ============== Navigation Label Styles ==============
     
     fun navLabelStyle(isSelected: Boolean): TextStyle {
         return if (isSelected) {
             TextStyle(
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF007AFF),
-                shadow = shadow(0.4f, 4f, Offset(1f, 1f))
+                color = Color.White,
+                shadow = shadow(0.6f, 4f, Offset(0f, 1f))
             )
         } else {
             TextStyle(
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Normal,
-                color = Color.Gray,
-                shadow = shadow(0.4f, 4f, Offset(1f, 1f))
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.75f),
+                shadow = shadow(0.4f, 3f, Offset(0f, 1f))
             )
         }
     }
     
-    // ============== 卡片专用样式（白色固定，用于彩色背景）==============
+    // ============== Card Styles ==============
     
     val cardTitle: TextStyle get() = TextStyle(
         fontSize = 12.sp,
@@ -201,10 +192,7 @@ data class GlassTextStyles(
     )
 }
 
-// ============== 兼容旧代码的静态对象 ==============
-// 注意：这些是静态样式，不会响应用户设置变化
-// 新代码应使用 LocalGlassTextStyles.current
-
+// ============== Legacy Compatibility Static Object ==============
 object GlassTypography {
     val displayLarge = GlassTextStyles.default().displayLarge
     val title = GlassTextStyles.default().title

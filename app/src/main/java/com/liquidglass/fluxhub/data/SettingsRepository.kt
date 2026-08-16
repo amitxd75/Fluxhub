@@ -28,28 +28,28 @@ class SettingsRepository(private val context: Context) {
         private val GLASS_BLUR = floatPreferencesKey("glass_blur")
         private val AGREEMENT_ACCEPTED = booleanPreferencesKey("agreement_accepted")
         
-        // 工具箱配置项（全局持久存储）
+        // Toolbox configuration preferences (Global persistent storage)
         private val THINKING_BUDGET = intPreferencesKey("thinking_budget")
         private val WEB_SEARCH_ENABLED = booleanPreferencesKey("web_search_enabled")
         private val SEARCH_PROVIDER = intPreferencesKey("search_provider")
         private val STREAM_ENABLED = booleanPreferencesKey("stream_enabled")
         private val CONTEXT_SIZE = intPreferencesKey("context_size")
         
-        // 灵动岛配置项
+        // Dynamic Island configuration preferences
         private val DYNAMIC_ISLAND_ENABLED = booleanPreferencesKey("dynamic_island_enabled")
         private val LOGIN_NOTIFICATION_MODE = stringPreferencesKey("login_notification_mode") // "every" or "first"
-        private val DYNAMIC_ISLAND_DURATION = intPreferencesKey("dynamic_island_duration") // 秒
+        private val DYNAMIC_ISLAND_DURATION = intPreferencesKey("dynamic_island_duration") // seconds
         private val SHOW_TOKEN_COUNT = booleanPreferencesKey("show_token_count")
         private val SHOW_ELAPSED_TIME = booleanPreferencesKey("show_elapsed_time")
         
-        // 触感反馈
+        // Haptic feedback
         private val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
         
-        // 字体样式配置
+        // Typography style configuration
         private val TEXT_COLOR_MODE = stringPreferencesKey("text_color_mode") // white, black
         private val TEXT_SHADOW_ENABLED = booleanPreferencesKey("text_shadow_enabled")
         
-        // 液态玻璃颜色
+        // Liquid glass color
         private val GLASS_COLOR = stringPreferencesKey("glass_color") // hex color or "default"
     }
 
@@ -98,7 +98,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val glassOpacity: Flow<Float> = context.dataStore.data.map { preferences ->
-        preferences[GLASS_OPACITY] ?: 0.1f // Default really transparent
+        preferences[GLASS_OPACITY] ?: 0.1f // Default transparent
     }
 
     val glassBlur: Flow<Float> = context.dataStore.data.map { preferences ->
@@ -106,7 +106,7 @@ class SettingsRepository(private val context: Context) {
     }
     
     val glassColor: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[GLASS_COLOR] ?: "default" // default = 白色半透明
+        preferences[GLASS_COLOR] ?: "default" // default = white translucent
     }
     
     suspend fun setApiKey(value: String) {
@@ -149,7 +149,6 @@ class SettingsRepository(private val context: Context) {
         setPreference(GLASS_COLOR, value)
     }
 
-
     val agreementAccepted: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[AGREEMENT_ACCEPTED] ?: false
     }
@@ -158,10 +157,10 @@ class SettingsRepository(private val context: Context) {
         setPreference(AGREEMENT_ACCEPTED, value)
     }
     
-    // ========== 工具箱配置项 ==========
+    // ========== Toolbox Configuration ==========
     
     val thinkingBudget: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[THINKING_BUDGET] ?: 1024 // 默认 1024 tokens
+        preferences[THINKING_BUDGET] ?: 1024 // Default 1024 tokens
     }
     
     val webSearchEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
@@ -173,11 +172,12 @@ class SettingsRepository(private val context: Context) {
     }
     
     val streamEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[STREAM_ENABLED] ?: true // 默认开启流式输出
+        preferences[STREAM_ENABLED] ?: true // Default streaming enabled
     }
     
     val contextSize: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[CONTEXT_SIZE] ?: 64 // 默认 64 条消息
+        val raw = preferences[CONTEXT_SIZE] ?: 32768 // Default 32K tokens
+        if (raw in 1..128) raw * 1024 else raw
     }
     
     suspend fun setThinkingBudget(value: Int) {
@@ -197,7 +197,7 @@ class SettingsRepository(private val context: Context) {
     }
     
     val hapticFeedbackEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[HAPTIC_FEEDBACK_ENABLED] ?: true // 默认开启震动
+        preferences[HAPTIC_FEEDBACK_ENABLED] ?: true // Default haptics enabled
     }
 
     suspend fun setHapticFeedbackEnabled(value: Boolean) {
@@ -205,29 +205,29 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setContextSize(value: Int) {
-        setPreference(CONTEXT_SIZE, value.coerceIn(1, 128))
+        setPreference(CONTEXT_SIZE, value.coerceIn(0, 262144))
     }
     
-    // ========== 灵动岛配置项 ==========
+    // ========== Dynamic Island Configuration ==========
     
     val dynamicIslandEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[DYNAMIC_ISLAND_ENABLED] ?: true // 默认开启
+        preferences[DYNAMIC_ISLAND_ENABLED] ?: true // Default enabled
     }
     
     val loginNotificationMode: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[LOGIN_NOTIFICATION_MODE] ?: "first" // 默认仅首次
+        preferences[LOGIN_NOTIFICATION_MODE] ?: "first" // Default first launch only
     }
     
     val dynamicIslandDuration: Flow<Int> = context.dataStore.data.map { preferences ->
-        preferences[DYNAMIC_ISLAND_DURATION] ?: 3 // 默认 3 秒
+        preferences[DYNAMIC_ISLAND_DURATION] ?: 3 // Default 3 seconds
     }
     
     val showTokenCount: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SHOW_TOKEN_COUNT] ?: true // 默认显示
+        preferences[SHOW_TOKEN_COUNT] ?: true // Default show token count
     }
     
     val showElapsedTime: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[SHOW_ELAPSED_TIME] ?: true // 默认显示
+        preferences[SHOW_ELAPSED_TIME] ?: true // Default show elapsed time
     }
     
     suspend fun setDynamicIslandEnabled(value: Boolean) {
@@ -250,14 +250,14 @@ class SettingsRepository(private val context: Context) {
         setPreference(SHOW_ELAPSED_TIME, value)
     }
     
-    // ========== 字体样式配置 ==========
+    // ========== Typography Configuration ==========
     
     val textColorMode: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[TEXT_COLOR_MODE] ?: "white" // 默认白色字体
+        preferences[TEXT_COLOR_MODE] ?: "white" // Default white text
     }
     
     val textShadowEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[TEXT_SHADOW_ENABLED] ?: true // 默认开启阴影
+        preferences[TEXT_SHADOW_ENABLED] ?: true // Default shadow enabled
     }
     
     suspend fun setTextColorMode(value: String) {

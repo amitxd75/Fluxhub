@@ -21,6 +21,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+
 val LocalHighlighter = compositionLocalOf<Highlighter> { error("No Highlighter provided") }
 
 private const val MAX_CODE_LENGTH = 8192
@@ -28,12 +33,15 @@ private const val MAX_CODE_LENGTH = 8192
 @Composable
 fun ProvideHighlighter(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val highlighter = remember { Highlighter(context) }
+    val highlighter = remember { Highlighter.getInstance(context) }
     CompositionLocalProvider(LocalHighlighter provides highlighter) {
         content()
     }
 }
 
+private val highlightCache = androidx.collection.LruCache<String, AnnotatedString>(128)
+
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 @Composable
 fun HighlightText(
     code: String,
@@ -51,39 +59,59 @@ fun HighlightText(
     minLines: Int = 1,
 ) {
     val highlighter = LocalHighlighter.current
-    var annotatedString by remember { mutableStateOf(AnnotatedString(code)) }
+    val cacheKey = "$language::$code"
+    
+    var annotatedString by remember(code, language) {
+        val cached = highlightCache.get(cacheKey)
+        if (cached != null) {
+            mutableStateOf(cached)
+        } else {
+            mutableStateOf(AnnotatedString(code))
+        }
+    }
 
     val updatedCode by rememberUpdatedState(code)
     val updatedLanguage by rememberUpdatedState(language)
 
     LaunchedEffect(Unit) {
-        snapshotFlow { updatedCode to updatedLanguage }.collect { (code, lang) ->
-            // 参考 RikkaHub：直接高亮，无延迟
-            if (code.length <= MAX_CODE_LENGTH) {
-                try {
-                    val tokens = highlighter.highlight(code, lang)
-                    annotatedString = buildAnnotatedString {
-                        tokens.fastForEach { token ->
-                            buildHighlightText(token, colors)
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    annotatedString = AnnotatedString(code)
+        snapshotFlow { updatedCode to updatedLanguage }
+            .debounce(150)
+            .distinctUntilChanged()
+            .collect { (c, lang) ->
+                val key = "$lang::$c"
+                val cached = highlightCache.get(key)
+                if (cached != null) {
+                    annotatedString = cached
+                    return@collect
                 }
-            } else {
-                annotatedString = AnnotatedString(code)
+
+                if (c.length <= MAX_CODE_LENGTH && lang.isNotBlank()) {
+                    try {
+                        val tokens = withContext(Dispatchers.Default) {
+                            highlighter.highlight(c, lang)
+                        }
+                        val result = buildAnnotatedString {
+                            tokens.fastForEach { token ->
+                                buildHighlightText(token, colors)
+                            }
+                        }
+                        highlightCache.put(key, result)
+                        annotatedString = result
+                    } catch (e: Exception) {
+                        annotatedString = AnnotatedString(c)
+                    }
+                } else {
+                    annotatedString = AnnotatedString(c)
+                }
             }
-        }
     }
 
-    // 分级渲染策略：如果代码超长，关闭昂贵的实时高亮计算以保性能
+    // Tiered rendering strategy: disable expensive real-time highlighting for very long code
     val isVeryLong = remember(code) { code.length > 2000 }
 
-    // 直接渲染代码（折叠逻辑由外层 CodeBlock 控制，避免重复）
+    // Direct render text (collapse logic is managed by outer CodeBlock)
     val textToDisplay: CharSequence = if (isVeryLong) code else annotatedString
 
-    // 根据实际类型调用正确的 Text 重载
     when (textToDisplay) {
         is AnnotatedString -> Text(
             text = textToDisplay,

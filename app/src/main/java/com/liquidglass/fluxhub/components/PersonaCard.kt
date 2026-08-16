@@ -1,11 +1,13 @@
 package com.liquidglass.fluxhub.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
@@ -22,15 +24,16 @@ import com.kyant.capsule.ContinuousRoundedRectangle
 import com.liquidglass.fluxhub.data.Persona
 
 /**
- * 灵动角色卡片组件
- * 采用水平布局：图标在左侧，文字在右侧
+ * Persona Card Component
+ * Horizontal layout with icon on left and text on right
  */
 @Composable
 fun PersonaCard(
     persona: Persona,
     backdrop: Backdrop,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    blurStrength: Float = 16f
 ) {
     Box(
         modifier = modifier
@@ -39,7 +42,7 @@ fun PersonaCard(
                 shape = { ContinuousRoundedRectangle(20.dp) },
                 effects = {
                     vibrancy()
-                    blur(8.dp.toPx())
+                    blur(blurStrength.dp.toPx())
                 },
                 onDrawSurface = {
                     drawRect(persona.color.copy(alpha = 0.5f))
@@ -53,16 +56,12 @@ fun PersonaCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Start
         ) {
-            // 左侧图标容器
+            // Icon container on left
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { ContinuousRoundedRectangle(14.dp) },
-                        effects = { blur(0f) },
-                        onDrawSurface = { drawRect(Color.White.copy(alpha = 0.2f)) }
-                    ),
+                    .clip(ContinuousRoundedRectangle(14.dp))
+                    .background(Color.White.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -75,7 +74,7 @@ fun PersonaCard(
             
             Spacer(Modifier.width(14.dp))
             
-            // 右侧文字信息
+            // Text information on right
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center

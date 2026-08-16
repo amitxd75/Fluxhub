@@ -14,8 +14,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 
 /**
- * 自动跟随键盘滚动的 Hook
- * 参考 RikkaHub 实现，优化减少卡顿
+ * Auto-scroll hook following keyboard IME changes.
+ * Adapted from RikkaHub.
  */
 @Composable
 fun ImeLazyListAutoScroller(

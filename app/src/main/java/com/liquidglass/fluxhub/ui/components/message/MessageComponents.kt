@@ -24,13 +24,13 @@ import com.kyant.backdrop.Backdrop
 import com.liquidglass.fluxhub.components.LiquidButton
 
 /**
- * 消息头像组件
+ * Message avatar component
  */
 @Composable
 fun MessageAvatar(
     isUser: Boolean,
     modelName: String? = null,
-    userName: String = "你",
+    userName: String = "You",
     userAvatar: String = "",
     timestamp: Long? = null,
     modifier: Modifier = Modifier
@@ -56,7 +56,7 @@ fun MessageAvatar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (!isUser) {
-            // AI 头像
+            // AI avatar on the left
             Surface(
                 modifier = Modifier.size(32.dp),
                 shape = CircleShape,
@@ -87,7 +87,7 @@ fun MessageAvatar(
                 }
             }
         } else {
-            // 用户头像在右侧
+            // User avatar on the right
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = userName,
@@ -117,7 +117,7 @@ fun MessageAvatar(
                     } else {
                         Icon(
                             imageVector = Lucide.User,
-                            contentDescription = "用户",
+                            contentDescription = "User",
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -129,8 +129,8 @@ fun MessageAvatar(
 }
 
 /**
- * 消息操作按钮 - 复制、重新生成、删除等
- * 使用液态玻璃按钮样式
+ * Message action buttons - Copy, Regenerate, Edit, Delete
+ * Uses Liquid Button styling
  */
 @Composable
 fun MessageActionButtons(
@@ -158,10 +158,10 @@ fun MessageActionButtons(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         itemVerticalAlignment = Alignment.CenterVertically
     ) {
-        // 复制按钮
+        // Copy button
         LiquidActionButton(
             icon = if (showCopiedHint) Lucide.Check else Lucide.Copy,
-            contentDescription = if (showCopiedHint) "已复制" else "复制",
+            contentDescription = if (showCopiedHint) "Copied" else "Copy",
             backdrop = backdrop,
             onClick = {
                 scope.launch {
@@ -169,40 +169,39 @@ fun MessageActionButtons(
                         ClipEntry(ClipData.newPlainText("message", content))
                     )
                     showCopiedHint = true
-                    // 显示复制成功通知
                     com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                        message = "已复制到剪贴板",
+                        message = "Copied to clipboard",
                         avatar = "📝"
                     )
                 }
             }
         )
         
-        // AI 消息才显示重新生成
+        // Regenerate (AI message only)
         if (!isUser && onRegenerate != null) {
             LiquidActionButton(
                 icon = Lucide.RefreshCw,
-                contentDescription = "重新生成",
+                contentDescription = "Regenerate",
                 backdrop = backdrop,
                 onClick = onRegenerate
             )
         }
         
-        // 编辑按钮
+        // Edit button
         if (onEdit != null) {
             LiquidActionButton(
                 icon = Lucide.Pencil,
-                contentDescription = "编辑",
+                contentDescription = "Edit",
                 backdrop = backdrop,
                 onClick = onEdit
             )
         }
         
-        // 删除按钮
+        // Delete button
         if (onDelete != null) {
             LiquidActionButton(
                 icon = Lucide.Trash2,
-                contentDescription = "删除",
+                contentDescription = "Delete",
                 backdrop = backdrop,
                 tint = Color(0xFFFF453A).copy(alpha = 0.6f),
                 onClick = onDelete
@@ -212,8 +211,8 @@ fun MessageActionButtons(
 }
 
 /**
- * 单个液态玻璃操作按钮
- * 使用 pointerInput 消耗拖拽事件，防止触发侧边栏或滚动
+ * Single liquid glass action button
+ * Uses pointerInput to consume drag events and prevent unwanted parent scrolling
  */
 @Composable
 private fun LiquidActionButton(
@@ -227,7 +226,7 @@ private fun LiquidActionButton(
         onClick = onClick,
         backdrop = backdrop,
         modifier = Modifier
-            .size(24.dp) // 缩小尺寸 (32.dp -> 24.dp)
+            .size(24.dp)
             .pointerInput(Unit) {
                 detectDragGestures { _, _ -> }
             },
@@ -238,14 +237,14 @@ private fun LiquidActionButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            modifier = Modifier.size(12.dp), // 缩小图标 (16.dp -> 12.dp)
-            tint = Color(0xFF1C1C1E).copy(alpha = 0.7f) // 改为深色图标以提高在白色按钮上的可见性
+            modifier = Modifier.size(12.dp),
+            tint = Color(0xFF1C1C1E).copy(alpha = 0.7f)
         )
     }
 }
 
 /**
- * 消息操作底部弹窗
+ * Message actions bottom sheet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -257,9 +256,8 @@ fun MessageActionsSheet(
     onRegenerate: (() -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
-    onEditAndResend: (() -> Unit)? = null  // 新增：编辑并重发
+    onEditAndResend: (() -> Unit)? = null
 ) {
-    // 删除确认状态
     var showDeleteConfirm by remember { mutableStateOf(false) }
     
     ModalBottomSheet(
@@ -272,21 +270,21 @@ fun MessageActionsSheet(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 复制
+            // Copy
             SheetActionCard(
                 icon = Lucide.Copy,
-                text = "复制",
+                text = "Copy",
                 onClick = {
                     onCopy()
                     onDismiss()
                 }
             )
             
-            // 编辑并重发 (仅用户消息)
+            // Edit & Resend (User message only)
             if (isUser && onEditAndResend != null) {
                 SheetActionCard(
                     icon = Lucide.Pencil,
-                    text = "编辑并重发",
+                    text = "Edit & Resend",
                     onClick = {
                         onEditAndResend()
                         onDismiss()
@@ -294,11 +292,11 @@ fun MessageActionsSheet(
                 )
             }
             
-            // 重新生成 (仅 AI 消息)
+            // Regenerate (AI message only)
             if (!isUser && onRegenerate != null) {
                 SheetActionCard(
                     icon = Lucide.RefreshCw,
-                    text = "重新生成",
+                    text = "Regenerate",
                     onClick = {
                         onRegenerate()
                         onDismiss()
@@ -306,11 +304,11 @@ fun MessageActionsSheet(
                 )
             }
             
-            // 编辑 (仅 AI 消息)
+            // Edit (AI message only)
             if (!isUser && onEdit != null) {
                 SheetActionCard(
                     icon = Lucide.Pencil,
-                    text = "编辑",
+                    text = "Edit",
                     onClick = {
                         onEdit()
                         onDismiss()
@@ -318,13 +316,12 @@ fun MessageActionsSheet(
                 )
             }
             
-            // 删除（带确认）
+            // Delete (with confirmation)
             if (onDelete != null) {
                 if (showDeleteConfirm) {
-                    // 确认删除状态
                     SheetActionCard(
                         icon = Lucide.TriangleAlert,
-                        text = "确认删除？点击删除",
+                        text = "Confirm Delete? Tap to delete",
                         containerColor = MaterialTheme.colorScheme.error,
                         onClick = {
                             onDelete()
@@ -334,7 +331,7 @@ fun MessageActionsSheet(
                 } else {
                     SheetActionCard(
                         icon = Lucide.Trash2,
-                        text = "删除",
+                        text = "Delete",
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                         onClick = {
                             showDeleteConfirm = true

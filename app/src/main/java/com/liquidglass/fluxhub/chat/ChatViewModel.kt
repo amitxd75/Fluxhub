@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
@@ -41,21 +42,21 @@ import java.util.Collections
 
 private const val TAG = "ChatViewModel"
 
-// 用于 UI 显示的消息 (支持消息分支 - 参考 RikkaHub)
-// @Immutable 帮助 Compose 跳过不必要的重组
+// Message model for UI display (supports message branching)
+// @Immutable helps Compose skip unnecessary recompositions
 @androidx.compose.runtime.Immutable
 data class UiMessage(
     val id: String = UUID.randomUUID().toString(),
     val role: String,
-    val content: String,  // 改为 val 配合 Immutable
-    val thinkingContent: String? = null,  // 改为 val 配合 Immutable
+    val content: String,
+    val thinkingContent: String? = null,
     val isStreaming: Boolean = false,
     val model: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
-    // 消息分支支持
-    val parentId: String? = null,  // 关联的父消息 ID（用于分支追踪）
-    val versionIndex: Int = 0,     // 当前版本索引
-    val totalVersions: Int = 1     // 总版本数
+    // Message branch support
+    val parentId: String? = null,  // Parent message ID (for branch tracking)
+    val versionIndex: Int = 0,     // Current version index
+    val totalVersions: Int = 1     // Total versions count
 )
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -63,7 +64,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val json = Json { 
         ignoreUnknownKeys = true
         explicitNulls = false
-        encodeDefaults = true // 确保传过去的 stream: false 等默认值生效
+        encodeDefaults = true
     }
     
     private val client = OkHttpClient.Builder()
@@ -96,30 +97,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var showError by mutableStateOf(false)
         private set
     
-    // 设置是否初始化完成 (用于防止壁纸闪烁)
+    // Whether settings are initialized (prevents wallpaper flashing)
     var isSettingsInitialized by mutableStateOf(false)
         private set
     
-    // 配置（从当前 Provider 或 DataStore 加载）
+    // Configuration (loaded from current Provider or DataStore)
     var apiKey by mutableStateOf("")
     var baseUrl by mutableStateOf("https://api.openai.com/v1")
-    var model by mutableStateOf("") // 默认为空，用户需要选择
-    var defaultModel by mutableStateOf("") // 全局默认模型
+    var model by mutableStateOf("") // Empty by default, selected by user
+    var defaultModel by mutableStateOf("") // Global default model
     
-    // 请求参数 (现在从当前助手读取)
+    // Request parameters (read from current assistant)
     var temperature by mutableStateOf(0.7f)
     var topP by mutableStateOf(1.0f)
-    var maxTokens by mutableStateOf<Int?>(null) // null = 使用模型默认值
+    var maxTokens by mutableStateOf<Int?>(null) // null = use model default
     
-    // 记录已删除的消息 ID，防止 sync 逻辑将其“复活”
+    // Track deleted message IDs to prevent resurrection during sync
     private val deletedMessageIds = Collections.synchronizedSet(HashSet<String>())
     
-    // 记录"临时会话" ID (尚未保存到数据库的会话)
+    // Track transient conversation IDs (not yet saved to DB)
     private val transientConversationIds = Collections.synchronizedSet(HashSet<String>())
-    // 暂存系统提示词 (用于在第一条消息发送时写入)
+    // Pending system prompt for first user message
     private var pendingSystemPrompt: String? = null
     
-    // 当前选中的图片 URI (Vision)
+    // Selected image URI (Vision)
     var selectedImageUri by mutableStateOf<Uri?>(null)
 
     fun stopGeneration() {
@@ -127,15 +128,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         isLoading = false
     }
     
-    // 输入框文本（保存在 ViewModel 中，避免导航时丢失）
+    // Input text (persisted in ViewModel across navigation)
     var inputText by mutableStateOf("")
     
-    // 编辑状态：正在编辑的消息 ID
+    // Editing state: ID of the message being edited
     var editingMessageId by mutableStateOf<String?>(null)
         private set
     
     /**
-     * 开始编辑消息
+     * Start editing message
      */
     fun startEditingMessage(messageId: String, content: String) {
         editingMessageId = messageId
@@ -143,7 +144,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * 取消编辑
+     * Cancel editing
      */
     fun cancelEditing() {
         editingMessageId = null
@@ -151,11 +152,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * 是否正在编辑
+     * Check if currently editing
      */
     fun isEditing(): Boolean = editingMessageId != null
     
-    // 显示设置
+    // Display settings
     var themeMode by mutableStateOf("system") // system, light, dark
     var wallpaperUri by mutableStateOf<String?>(null)
 
@@ -165,31 +166,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var glassBlur by mutableStateOf(16f)
         private set
     
-    var glassColor by mutableStateOf("default") // default, 或十六进制颜色如 "FF007AFF"
+    var glassColor by mutableStateOf("default") // default, or hex color like "FF007AFF"
         private set
     
-    // 当前助手
+    // Current assistant
     var currentAssistant by mutableStateOf<AssistantEntity?>(null)
         private set
     
-    // 当前服务商
+    // Current provider
     var currentProvider by mutableStateOf<ProviderEntity?>(null)
         private set
 
-    // 当前会话
+    // Current conversation
     var currentConversationId by mutableStateOf<String?>(null)
-    private set
-    var currentConversationTitle by mutableStateOf("新对话")
-    private set
-    
-    // 会话列表
-    val conversations = mutableStateListOf<ConversationEntity>()
-    
-    // 用户协议状态
-    var agreementAccepted by mutableStateOf(true) // 默认 true 防止闪烁，实际值从 DataStore 加载
+        private set
+    var currentConversationTitle by mutableStateOf("New Chat")
         private set
     
-    // ========== 工具箱配置项（全局持久存储）==========
+    // Conversation list
+    val conversations = mutableStateListOf<ConversationEntity>()
+    
+    // User agreement state
+    var agreementAccepted by mutableStateOf(true)
+        private set
+    
+    // ========== Toolbox configuration (Global persistent storage) ==========
     var thinkingBudget by mutableStateOf(1024)
         private set
     var webSearchEnabled by mutableStateOf(false)
@@ -201,40 +202,39 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     var contextSize by mutableStateOf(64)
         private set
     
-    // ========== 灵动岛配置项 ==========
+    // ========== Dynamic Island configuration ==========
     var dynamicIslandEnabled by mutableStateOf(true)
         private set
     var loginNotificationMode by mutableStateOf("first") // "first" or "every"
-        private set
-    var dynamicIslandDuration by mutableStateOf(3) // 秒
+    var dynamicIslandDuration by mutableStateOf(3) // seconds
         private set
     var showTokenCount by mutableStateOf(true)
         private set
     var showElapsedTime by mutableStateOf(true)
         private set
     
-    // 触感反馈
+    // Haptic feedback
     var hapticFeedbackEnabled by mutableStateOf(true)
         private set
     
-    // ========== 字体样式配置 ==========
+    // ========== Typography style configuration ==========
     var textColorMode by mutableStateOf("white") // white, black
         private set
     var textShadowEnabled by mutableStateOf(true)
         private set
 
-    // 当前活跃的 EventSource (用于取消)
+    // Active EventSource (for cancellation)
     private var currentEventSource: EventSource? = null
     
-    // 生成任务 Job (参考 RikkaHub ChatService)
+    // Generation task Job
     private var generationJob: Job? = null
     private var requestTimeoutJob: Job? = null
     
-    // Flow 采集任务
+    // Flow collection jobs
     private var messagesJob: Job? = null
     private var conversationsJob: Job? = null
     
-    // 模型列表获取任务（防抖）
+    // Model list fetching job (debounced)
     private var fetchModelsJob: Job? = null
     
     init {
@@ -242,27 +242,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         startConversationsCollection()
         startAssistantsCollection()
         startProvidersCollection()
-        // 应用启动时总是创建新对话，避免加载历史消息导致的切换卡顿
-        // 用户仍可通过侧边栏切换到历史对话
         createNewConversation()
     }
     
     private fun loadSettings() {
         viewModelScope.launch {
-            // 预加载关键视觉配置，防止 UI 闪烁 (FOUC)
-            // 读取 wallaperUri 和 agreementAccepted 的初始值
             try {
                 wallpaperUri = settingsRepository.wallpaperUri.first()
                 agreementAccepted = settingsRepository.agreementAccepted.first()
-                defaultModel = settingsRepository.defaultModel.first() // 预加载默认模型
+                defaultModel = settingsRepository.defaultModel.first()
                 isSettingsInitialized = true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to preload settings", e)
-                isSettingsInitialized = true // 即使失败也允许渲染
+                isSettingsInitialized = true
             }
 
             collectSetting(settingsRepository.apiKey) { value ->
-                // 仅在没有当前 Provider 时接受全局配置更新，避免冲突
                 if (currentProvider == null) {
                     apiKey = value
                     if (value.isNotBlank() && baseUrl.isNotBlank()) fetchModels()
@@ -282,21 +277,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             collectSetting(settingsRepository.glassBlur) { glassBlur = it }
             collectSetting(settingsRepository.glassColor) { glassColor = it }
             collectSetting(settingsRepository.agreementAccepted) { agreementAccepted = it }
-            // 加载工具箱配置项
+            // Load toolbox configurations
             collectSetting(settingsRepository.thinkingBudget) { thinkingBudget = it }
             collectSetting(settingsRepository.webSearchEnabled) { webSearchEnabled = it }
             collectSetting(settingsRepository.searchProvider) { searchProvider = it }
             collectSetting(settingsRepository.streamEnabled) { streamEnabled = it }
             collectSetting(settingsRepository.contextSize) { contextSize = it }
-            // 加载灵动岛配置项
+            // Load dynamic island configurations
             collectSetting(settingsRepository.dynamicIslandEnabled) { dynamicIslandEnabled = it }
             collectSetting(settingsRepository.loginNotificationMode) { loginNotificationMode = it }
             collectSetting(settingsRepository.dynamicIslandDuration) { dynamicIslandDuration = it }
             collectSetting(settingsRepository.showTokenCount) { showTokenCount = it }
             collectSetting(settingsRepository.showElapsedTime) { showElapsedTime = it }
-            // 触感反馈
+            // Haptic feedback
             collectSetting(settingsRepository.hapticFeedbackEnabled) { hapticFeedbackEnabled = it }
-            // 加载字体样式配置
+            // Load typography configuration
             collectSetting(settingsRepository.textColorMode) { textColorMode = it }
             collectSetting(settingsRepository.textShadowEnabled) { textShadowEnabled = it }
         }
@@ -359,7 +354,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val success = dataRepository.importData(uri)
             if (success) {
-                // 重新加载数据
                 currentConversationId?.let { switchConversation(it) }
             }
             onResult(success)
@@ -379,11 +373,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun fetchModels() {
         if (apiKey.isBlank() || baseUrl.isBlank()) return
         
-        // 取消之前的获取任务（防抖）
         fetchModelsJob?.cancel()
         
         fetchModelsJob = viewModelScope.launch {
-            // 延迟 200ms 防抖，避免 apiKey 和 baseUrl 同时变化时多次调用
             kotlinx.coroutines.delay(200)
             
             try {
@@ -395,19 +387,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 availableModels.clear()
                 availableModels.addAll(modelIds)
 
-                // 校验当前选中的模型是否有效
                 if (model.isNotBlank() && !modelIds.contains(model)) {
                     Log.w(TAG, "Current model $model not available in $baseUrl")
-                    // 注意：不要在这里清空 saveModel("")，用户可能只是暂时连不上，或者 Provider 没更新
-                    // 我们保持现状，但在 UI 上可以给个提示
                 }
             } catch (e: ChatApiException) {
                 Log.e(TAG, "Failed to fetch models from $baseUrl", e)
                 if (availableModels.isEmpty()) {
-                    val errorMessage = e.message ?: "获取模型列表失败"
+                    val errorMessage = e.message ?: "Failed to fetch model list"
                     showErrorMessage(
                         if (errorMessage.startsWith("HTTP ")) {
-                            "获取模型列表失败: $errorMessage"
+                            "Failed to fetch model list: $errorMessage"
                         } else {
                             errorMessage
                         }
@@ -416,7 +405,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e(TAG, "Network error fetching models from $baseUrl", e)
                 if (availableModels.isEmpty()) {
-                    showErrorMessage("网络错误，无法获取模型列表")
+                    showErrorMessage("Network error, unable to fetch model list")
                 }
             }
         }
@@ -454,7 +443,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
 
-                // 组合消息：保留所有 UI 独有的消息（主要是 AI 占位符）
                 val finalMessages = ChatMessageSyncPlanner.merge(
                     dbMessages = dbMessages,
                     currentMessages = messages,
@@ -462,13 +450,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 val uiOnlyMessageCount = finalMessages.size - dbMessages.size
                 
-                // 智能更新 messages 列表
-                // 1. 处理删除或重排
                 if (messages.size != finalMessages.size) {
                     messages.clear()
                     messages.addAll(finalMessages)
                 } else {
-                    // 2. 处理内容更新 (逐个替换)
                     finalMessages.forEachIndexed { index, newMessage ->
                         if (messages[index] != newMessage) {
                             messages[index] = newMessage
@@ -481,35 +466,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    fun createNewConversation(systemPrompt: String? = null, title: String = "新对话", showNotification: Boolean = false) {
-        // 同步更新 ID 和 UI 状态，防止 sendMessage 竞争
+    fun createNewConversation(systemPrompt: String? = null, title: String = "New Chat", showNotification: Boolean = false) {
         val newId = UUID.randomUUID().toString()
         currentConversationId = newId
         currentConversationTitle = title
         messages.clear()
         
-        // 应用默认模型 (如果有)
         if (defaultModel.isNotBlank()) {
             model = defaultModel
         }
         
-        // 标记为临时会话
         transientConversationIds.add(newId)
         pendingSystemPrompt = systemPrompt
         
-        // 开启新消息采集 (此时 DB 为空，所以 UI 也是空的)
         startMessagesCollection(newId)
         
         viewModelScope.launch {
-            // 注意：我们不再立即插入 ConversationEntity，也不插入 systemPrompt
-            // 而是等到用户发送第一条消息时才真正创建
-            
-            // 但是我们要保存这个 ID 到设置，以便下次打开尝试恢复(虽然没存DB会失败，但逻辑一致)
             settingsRepository.setCurrentConversationId(newId)
-            // 显示新对话创建成功通知
             if (showNotification) {
                 com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                    message = "新对话已创建",
+                    message = "New chat created",
                     avatar = "✨"
                 )
             }
@@ -521,22 +497,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         
         val previousConversationId = currentConversationId
         
-        // 同步设置以提升响应速度
         currentConversationId = conversationId
         messages.clear()
         
-        // 取消当前流式输出
         cancelGeneration()
         
         viewModelScope.launch {
-            // 清理之前的会话
             if (previousConversationId != null) {
                 if (transientConversationIds.contains(previousConversationId)) {
-                    // 如果是临时会话且未转正，直接丢弃
                     Log.d(TAG, "Discarding transient conversation: $previousConversationId")
                     transientConversationIds.remove(previousConversationId)
                 } else {
-                    // 检查是否为空会话（已存在数据库但无消息）
                     val previousMessages = messageDao.getMessageCountForConversation(previousConversationId)
                     if (previousMessages == 0) {
                         Log.d(TAG, "Cleaning up empty conversation: $previousConversationId")
@@ -555,23 +526,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     fun deleteConversation(conversationId: String) {
-        // 如果是当前会话，立即清空消息列表
-        // 1. 提升响应速度
-        // 2. 防止 sync 逻辑将已删除的消息误判为"尚未保存的UI消息"而保留
         if (conversationId == currentConversationId) {
             messages.clear()
         }
 
         viewModelScope.launch {
-            // 删除消息
             messageDao.deleteMessagesForConversation(conversationId)
-            // 删除会话
             conversationDao.deleteConversation(conversationId)
             
-            // 移除手动 createNewConversation，交由 startConversationsCollection 监听处理
-            // 显示删除成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "对话已删除",
+                message = "Conversation deleted",
                 avatar = "🗑️"
             )
         }
@@ -580,23 +544,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun renameConversation(conversationId: String, newTitle: String) {
         viewModelScope.launch {
             conversationDao.updateConversationTitle(conversationId, newTitle)
-            // 如果是当前会话，更新 UI 中的标题
             if (conversationId == currentConversationId) {
                 currentConversationTitle = newTitle
             }
-            // 显示重命名成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "对话已重命名",
+                message = "Conversation renamed",
                 avatar = "✏️"
             )
         }
     }
 
     fun deleteMessage(messageId: String) {
-        // 记录已删除 ID，防止 sync 逻辑复活
         deletedMessageIds.add(messageId)
-        
-        // 立即从 UI 移除
         messages.removeAll { it.id == messageId }
         
         viewModelScope.launch {
@@ -605,7 +564,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * 删除指定消息及其后续所有消息（用于编辑重发）
+     * Delete specified message and all following messages
      */
     fun deleteMessageAndFollowing(messageId: String) {
         val plan = ChatMessageBranchPlanner.deleteMessageAndFollowing(messages, messageId)
@@ -614,17 +573,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         
-        // 记录 IDs
         deletedMessageIds.addAll(plan.idsToDelete)
         
         Log.d(TAG, "deleteMessageAndFollowing: deleting ${plan.idsToDelete.size} messages starting from index ${plan.startIndex}")
         
-        // 立即更新 UI 列表（移除从该索引开始的所有消息）
         val messagesToKeep = messages.take(plan.startIndex)
         messages.clear()
         messages.addAll(messagesToKeep)
         
-        // 异步删除数据库记录
         viewModelScope.launch {
             plan.idsToDelete.forEach { id ->
                 messageDao.deleteMessage(id)
@@ -634,15 +590,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * 处理消息编辑
+     * Handle message editing
      * 
-     * @param newContent 编辑后的新内容
-     * 
-     * 行为：
-     * 1. 找到正在编辑的消息
-     * 2. 删除该消息之后的所有消息
-     * 3. 更新该消息的内容
-     * 4. 重新生成 AI 回复
+     * @param newContent The updated content
      */
     fun handleMessageEdit(newContent: String) {
         val messageId = editingMessageId ?: return
@@ -661,58 +611,47 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         
         Log.d(TAG, "handleMessageEdit: editing message at index ${plan.messageIndex}")
         
-        // 取消当前生成任务
         cancelGeneration()
         
-        // 1. 删除该消息之后的所有消息
+        // 1. Delete following messages
         deletedMessageIds.addAll(plan.idsToDelete)
         
-        // 2. 更新 UI 中的消息内容
+        // 2. Update UI message content
         val originalMessage = messages[plan.messageIndex]
         messages[plan.messageIndex] = originalMessage.copy(content = newContent)
         
-        // 3. 立即移除后续消息
+        // 3. Remove subsequent messages from UI
         messages.removeAll { plan.idsToDelete.contains(it.id) }
         
-        // 4. 清除编辑状态
+        // 4. Clear editing state
         editingMessageId = null
         inputText = ""
         
-        // 5. 异步更新数据库
+        // 5. Update database asynchronously
         viewModelScope.launch {
-            // 删除后续消息
             plan.idsToDelete.forEach { id ->
                 messageDao.deleteMessage(id)
             }
             
-            // 更新编辑的消息内容
             val existingMessage = messageDao.getMessage(messageId)
             if (existingMessage != null) {
                 messageDao.updateMessage(existingMessage.copy(content = newContent))
             }
             
-            // 更新会话时间
             conversationDao.updateConversationTimestamp(conversationId, System.currentTimeMillis())
         }
         
-        // 6. 重新生成 AI 回复
+        // 6. Regenerate AI response
         initiateAiResponse(conversationId)
     }
     
     /**
-     * 重新生成消息
-     * 
-     * @param messageId 消息 ID
-     * 
-     * 行为：
-     * - 用户消息：删除该消息之后的所有消息，从该用户消息重新生成 AI 回复
-     * - AI 消息：删除该 AI 消息及其后续所有消息，从上一条用户消息重新生成
+     * Regenerate message
      */
     fun regenerate(messageId: String) {
         if (ChatMessageBranchPlanner.regenerateFrom(messages, messageId) == null) return
         val conversationId = currentConversationId ?: return
         
-        // 取消当前生成任务
         cancelGeneration()
         
         generationJob = viewModelScope.launch {
@@ -727,19 +666,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 initiateAiResponse(conversationId)
             } catch (e: Exception) {
                 Log.e(TAG, "regenerate failed", e)
-                showErrorMessage("重试失败: ${e.message}")
+                showErrorMessage("Retry failed: ${e.message}")
             }
         }
     }
     
-    /**
-     * 生成 AI 回复（带父消息 ID，用于消息分支）
-     */
     private fun initiateAiResponseWithParent(conversationId: String, parentId: String) {
         val parentMessage = messages.find { it.id == parentId }
         val newVersionIndex = (parentMessage?.versionIndex ?: 0) + 1
         
-        // 添加 AI 消息占位符
         val aiMessageId = UUID.randomUUID().toString()
         messages.add(UiMessage(
             id = aiMessageId,
@@ -764,18 +699,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     /**
-     * 切换消息版本 (用于消息分支)
+     * Switch message version (for branching)
      */
     fun switchMessageVersion(messageId: String, direction: Int) {
         val plan = ChatMessageVersionPlanner.planSwitch(messages, messageId, direction) ?: return
-
-        // TODO: 从数据库加载对应版本的消息内容
-        // 目前简化处理：只更新版本索引
         messages[plan.messageIndex] = plan.updatedMessage
     }
     
     /**
-     * 取消当前生成任务 (参考 RikkaHub)
+     * Cancel active generation task
      */
     fun cancelGeneration() {
         currentEventSource?.cancel()
@@ -786,7 +718,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         requestTimeoutJob = null
         isLoading = false
         
-        // 标记最后一条消息为非流式
         val lastMessage = messages.lastOrNull()
         if (lastMessage?.isStreaming == true) {
             val index = messages.indexOfLast { it.isStreaming }
@@ -795,8 +726,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-
-
 
     private fun startConversationsCollection() {
         conversationsJob?.cancel()
@@ -827,7 +756,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    // 助手 Flow 采集任务
     private var assistantsJob: Job? = null
     
     private fun startAssistantsCollection() {
@@ -835,27 +763,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         assistantsJob = viewModelScope.launch {
             assistantDao.getAllAssistants().collect { list ->
                 if (list.isEmpty()) {
-                    // 如果列表为空，创建一个默认助手
                     launch {
                         val defaultAssistant = AssistantEntity(
                             id = UUID.randomUUID().toString(),
-                            name = "通用助手",
+                            name = "General Assistant",
                             avatar = "🤖",
-                            systemPrompt = "你是一个有用的 AI 助手。",
+                            systemPrompt = "You are a helpful AI assistant.",
                             isDefault = true,
-                            modelId = null, // 使用默认模型
+                            modelId = null,
                             temperature = 0.7f,
                             topP = 1.0f
                         )
                         assistantDao.insertAssistant(defaultAssistant)
                     }
-                    // 清空当前列表并等待下一次数据发射
                     assistants.clear()
                 } else {
                     assistants.clear()
                     assistants.addAll(list)
                     
-                    // 如果没有当前助手，尝试加载默认助手
                     if (currentAssistant == null) {
                         currentAssistant = ChatAssistantSelector.defaultAssistant(list)
                         currentAssistant?.let { applyAssistantSettings(it) }
@@ -868,9 +793,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun switchAssistant(assistant: AssistantEntity) {
         currentAssistant = assistant
         applyAssistantSettings(assistant)
-        // 显示切换成功通知
         com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-            message = "已切换助手",
+            message = "Assistant switched",
             avatar = assistant.avatar ?: "🤖"
         )
     }
@@ -879,7 +803,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         temperature = assistant.temperature
         topP = assistant.topP
         maxTokens = assistant.maxTokens
-        // 不再覆盖 model，让用户自行在顶栏选择
     }
     
     fun createAssistant(
@@ -901,12 +824,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 topP = topP,
                 maxTokens = maxTokens,
                 modelId = modelId,
-                isDefault = assistants.isEmpty() // 第一个助手为默认
+                isDefault = assistants.isEmpty()
             )
             assistantDao.insertAssistant(assistant)
-            // 显示创建成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "助手已创建",
+                message = "Assistant created",
                 avatar = avatar ?: "🤖"
             )
         }
@@ -919,9 +841,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 currentAssistant = assistant
                 applyAssistantSettings(assistant)
             }
-            // 显示更新成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "助手已更新",
+                message = "Assistant updated",
                 avatar = assistant.avatar
             )
         }
@@ -934,15 +855,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 currentAssistant = ChatAssistantSelector.fallbackAfterDelete(assistantId, assistants)
                 currentAssistant?.let { applyAssistantSettings(it) }
             }
-            // 显示删除成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "助手已删除",
+                message = "Assistant deleted",
                 avatar = "🗑️"
             )
         }
     }
     
-    // ========== Provider 管理 ==========
+    // ========== Provider Management ==========
     
     private var providersJob: Job? = null
     
@@ -953,7 +873,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 providers.clear()
                 providers.addAll(list)
 
-                // 同步当前 Provider 的配置变更 (解决用户在其他页面修改配置后此处不更新的问题)
                 ChatProviderSelector.updatedConfigurationProvider(currentProvider, list)?.let { updated ->
                     Log.d(TAG, "Active provider config updated from DB")
                     currentProvider = updated
@@ -961,11 +880,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     fetchModels()
                 }
 
-                // 如果没有当前 Provider，尝试加载激活的 Provider
                 if (currentProvider == null && list.isNotEmpty()) {
                     currentProvider = ChatProviderSelector.defaultProvider(list)
                     currentProvider?.let { applyProviderSettings(it) }
-                    fetchModels() // 初始加载完成后抓取模型
+                    fetchModels()
                 }
             }
         }
@@ -978,10 +896,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val activatedProvider = provider.copy(isActive = true)
             currentProvider = activatedProvider
             applyProviderSettings(activatedProvider)
-            fetchModels() // 切换 Provider 后重新获取模型列表
-            // 显示切换成功通知
+            fetchModels()
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "已切换服务商",
+                message = "Provider switched",
                 avatar = "🔄"
             )
         }
@@ -1005,7 +922,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 baseUrl = baseUrl,
                 apiKey = apiKey,
                 icon = icon,
-                isActive = providers.isEmpty() // 第一个为激活状态
+                isActive = providers.isEmpty()
             )
             providerDao.insertProvider(provider)
             if (provider.isActive) {
@@ -1013,9 +930,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 applyProviderSettings(provider)
                 fetchModels()
             }
-            // 显示创建成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "服务商已创建",
+                message = "Provider created",
                 avatar = "➕"
             )
         }
@@ -1029,9 +945,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 applyProviderSettings(provider)
                 fetchModels()
             }
-            // 显示更新成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "服务商已更新",
+                message = "Provider updated",
                 avatar = "🔧"
             )
         }
@@ -1047,9 +962,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     fetchModels()
                 }
             }
-            // 显示删除成功通知
             com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                message = "服务商已删除",
+                message = "Provider deleted",
                 avatar = "🗑️"
             )
         }
@@ -1080,11 +994,43 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         persistSetting { setWallpaperUri(value) }
     }
 
-    // ========== 工具箱配置项更新方法 ==========
+    // ========== Toolbox Configuration Update Methods ==========
     
     fun updateThinkingBudget(value: Int) {
         thinkingBudget = value
         persistSetting { setThinkingBudget(value) }
+    }
+
+    fun getThinkingLevelName(): String {
+        return when {
+            thinkingBudget == 0 -> "Off"
+            thinkingBudget == -1 -> "Auto"
+            thinkingBudget <= 2048 -> "Low"
+            thinkingBudget <= 10000 -> "Med"
+            else -> "High"
+        }
+    }
+
+    fun cycleThinkingLevel() {
+        val nextBudget = when {
+            thinkingBudget == 0 -> 1024
+            thinkingBudget == -1 -> 0
+            thinkingBudget <= 2048 -> 8192
+            thinkingBudget <= 10000 -> 32000
+            else -> -1
+        }
+        updateThinkingBudget(nextBudget)
+        val name = when (nextBudget) {
+            0 -> "Thinking: Off"
+            -1 -> "Thinking: Auto Dynamic"
+            1024 -> "Thinking: Low"
+            8192 -> "Thinking: Medium"
+            else -> "Thinking: High"
+        }
+        com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
+            message = name,
+            avatar = "🧠"
+        )
     }
     
     fun updateWebSearchEnabled(value: Boolean) {
@@ -1107,11 +1053,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         persistSetting { setContextSize(value) }
     }
 
+    fun getContextSizeDisplayText(): String {
+        return when {
+            contextSize <= 0 -> "Max (Unlimited)"
+            contextSize <= 128 -> "$contextSize msgs"
+            contextSize >= 1000 -> "${contextSize / 1024}K tokens"
+            else -> "$contextSize tokens"
+        }
+    }
+
     private fun shouldSendOpenAiOnlyOptions(effectiveBaseUrl: String): Boolean {
         return ChatRequestBuilder.shouldSendOpenAiOnlyOptions(effectiveBaseUrl)
     }
 
     private fun reasoningEffortOrNull(effectiveBaseUrl: String): String? {
+        val modelLower = model.lowercase()
+        val isReasoningModel = modelLower.startsWith("o1") || 
+                               modelLower.startsWith("o3") || 
+                               modelLower.contains("reasoner") || 
+                               modelLower.contains("r1")
+        if (!isReasoningModel) return null
         return ChatRequestBuilder.reasoningEffortOrNull(effectiveBaseUrl, thinkingBudget)
     }
 
@@ -1122,7 +1083,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             if (isLoading) {
                 Log.w(TAG, "Request timeout, cancelling active generation")
                 cancelGeneration()
-                showErrorMessage("请求超时，请重试")
+                showErrorMessage("Request timed out, please retry")
             }
         }
     }
@@ -1133,7 +1094,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         isLoading = false
     }
     
-    // ========== 灵动岛配置项更新方法 ==========
+    // ========== Dynamic Island Configuration Update Methods ==========
     
     fun updateDynamicIslandEnabled(value: Boolean) {
         dynamicIslandEnabled = value
@@ -1167,19 +1128,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         ) ?: return
 
         if (preparedInput.hasImage) {
-            selectedImageUri = null // 消费图片
+            selectedImageUri = null
         }
         
-        // 优先从当前 Provider 获取配置，确保使用最新值
         val effectiveApiKey = currentProvider?.apiKey ?: apiKey
         
         if (effectiveApiKey.isBlank()) {
-            showErrorMessage("请先配置服务商")
+            showErrorMessage("Please configure a provider first")
             return
         }
         
         if (model.isBlank()) {
-            showErrorMessage("请先选择模型")
+            showErrorMessage("Please select a model first")
             return
         }
         
@@ -1187,13 +1147,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         
         Log.d(TAG, "sendMessage: user message queued, hasImage=${preparedInput.hasImage}, length=${preparedInput.plainText.length}")
         
-        // 添加用户消息
         val userMessageId = UUID.randomUUID().toString()
         val userMessage = UiMessage(id = userMessageId, role = "user", content = preparedInput.finalContent)
         messages.add(userMessage)
         
-        // 保存到数据库
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             messageDao.insertMessage(MessageEntity(
                 id = userMessageId,
                 conversationId = conversationId,
@@ -1201,22 +1159,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 content = preparedInput.finalContent
             ))
             
-            // 检查是否是临时会话，如果是，现在立即"转正"
             if (transientConversationIds.contains(conversationId)) {
                 Log.d(TAG, "Persisting transient conversation: $conversationId")
                 transientConversationIds.remove(conversationId)
                 
                 val conversation = ConversationEntity(
                     id = conversationId,
-                    title = preparedInput.title, // 用第一句话做标题
+                    title = preparedInput.title,
                     assistantId = currentAssistant?.id,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
                 conversationDao.insertConversation(conversation)
-                currentConversationTitle = conversation.title
+                withContext(Dispatchers.Main) {
+                    currentConversationTitle = conversation.title
+                }
                 
-                // 如果有暂存的 System Prompt，也写入
                 pendingSystemPrompt?.let { prompt ->
                     if (prompt.isNotBlank()) {
                          messageDao.insertMessage(MessageEntity(
@@ -1229,26 +1187,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     pendingSystemPrompt = null
                 }
             } else {
-                // 原有逻辑：更新会话时间和标题
-                if (messages.size <= 1) { // 这里的 messages.size 可能不准确，因为 Collection 是异步的
+                if (messages.size <= 1) {
                     val newTitle = preparedInput.title
                     conversationDao.updateConversationTitle(conversationId, newTitle)
-                    currentConversationTitle = newTitle
+                    withContext(Dispatchers.Main) {
+                        currentConversationTitle = newTitle
+                    }
                 }
-                // 更新时间
                 conversationDao.updateConversationTimestamp(conversationId, System.currentTimeMillis())
             }
         }
         
-        // 发起 AI 请求
         initiateAiResponse(conversationId)
     }
 
     fun initiateAiResponse(conversationId: String) {
-        // 强制在主线程执行 UI 更新，并确保状态不被之前的请求锁死
         viewModelScope.launch(Dispatchers.Main) {
             if (model.isBlank()) {
-                showErrorMessage("请先选择模型")
+                showErrorMessage("Please select a model first")
                 finishGeneration()
                 return@launch
             }
@@ -1276,7 +1232,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             
             clearError()
             
-            // 发起真正的 API 调用
             if (useStream) {
                 callStreamingApiWithEventSource(aiMessageId, conversationId)
             } else {
@@ -1293,7 +1248,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun callNonStreamingApi(aiMessageId: String, conversationId: String) {
         viewModelScope.launch {
             try {
-                // 构建消息列表（共用逻辑）
                 val requestMessages = buildApiMessages(messages, aiMessageId)
                 val effectiveBaseUrl = currentProvider?.baseUrl ?: baseUrl
                 val effectiveApiKey = currentProvider?.apiKey ?: apiKey
@@ -1307,7 +1261,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     topP = topP,
                     maxTokens = maxTokens,
                     reasoningEffort = reasoningEffort,
-                    includeStreamOptions = false
+                    thinkingBudget = thinkingBudget,
+                    includeStreamOptions = false,
+                    webSearch = webSearchEnabled,
+                    effectiveBaseUrl = effectiveBaseUrl
                 )
                 
                 val requestBody = json.encodeToString(JsonObject.serializer(), requestJson)
@@ -1326,14 +1283,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 finishGeneration()
                 val index = messages.indexOfFirst { it.id == aiMessageId }
                 if (index >= 0) {
-                    val safeContent = if (contentStr.isEmpty() && reasoningStr.isEmpty()) "⚠️ API 未返回任何内容" else contentStr
+                    val safeContent = if (contentStr.isEmpty() && reasoningStr.isEmpty()) "⚠️ API returned empty response" else contentStr
                     messages[index] = messages[index].copy(
                         content = safeContent,
                         thinkingContent = reasoningStr.takeIf { it.isNotEmpty() },
                         isStreaming = false
                     )
 
-                    // 保存到数据库
                     messageDao.insertMessage(MessageEntity(
                         id = aiMessageId,
                         conversationId = conversationId,
@@ -1346,10 +1302,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e(TAG, "Non-streaming request failed", e)
                 finishGeneration()
-                val errorMsg = "请求失败: ${e.message}"
+                val errorMsg = "Request failed: ${e.message}"
                 showErrorMessage(errorMsg)
                 
-                // 绝不移除气泡，而是显示错误
                 val index = messages.indexOfFirst { it.id == aiMessageId }
                 if (index >= 0) {
                     messages[index] = messages[index].copy(
@@ -1368,6 +1323,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             aiMessageId = aiMessageId,
             contextSize = contextSize,
             systemPrompt = currentAssistant?.systemPrompt,
+            webSearch = webSearchEnabled,
             imageBase64Loader = { uriString ->
                 try {
                     FileUtils.uriToBase64(getApplication(), Uri.parse(uriString))
@@ -1379,38 +1335,59 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun callStreamingApiWithEventSource(aiMessageId: String, conversationId: String) {
+    private fun callStreamingApiWithEventSource(aiMessageId: String, conversationId: String, retryAttempt: Int = 0) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "callStreamingApiWithEventSource: using baseUrl=$baseUrl, model=$model, contextSize=$contextSize")
+                Log.d(TAG, "callStreamingApiWithEventSource: using baseUrl=$baseUrl, model=$model, contextSize=$contextSize, retry=$retryAttempt")
                 
-                val messagesWithSystem = buildApiMessages(messages, aiMessageId)
                 val effectiveBaseUrl = currentProvider?.baseUrl ?: baseUrl
                 val effectiveApiKey = currentProvider?.apiKey ?: apiKey
                 val reasoningEffort = reasoningEffortOrNull(effectiveBaseUrl)
+
+                val (requestBody, messagesWithSystem) = withContext(Dispatchers.Default) {
+                    val messagesWithSystem = buildApiMessages(messages, aiMessageId)
+                    val requestJson = ChatRequestBuilder.buildRequestJson(
+                        model = model,
+                        messages = messagesWithSystem,
+                        stream = true,
+                        temperature = temperature,
+                        topP = topP,
+                        maxTokens = maxTokens,
+                        reasoningEffort = reasoningEffort,
+                        thinkingBudget = thinkingBudget,
+                        includeStreamOptions = false,
+                        webSearch = webSearchEnabled,
+                        effectiveBaseUrl = effectiveBaseUrl
+                    )
+                    val body = json.encodeToString(JsonObject.serializer(), requestJson)
+                    Pair(body, messagesWithSystem)
+                }
                 
-                val requestJson = ChatRequestBuilder.buildRequestJson(
-                    model = model,
-                    messages = messagesWithSystem,
-                    stream = true,
-                    temperature = temperature,
-                    topP = topP,
-                    maxTokens = maxTokens,
-                    reasoningEffort = reasoningEffort,
-                    includeStreamOptions = shouldSendOpenAiOnlyOptions(effectiveBaseUrl)
-                )
-                
-                val requestBody = json.encodeToString(JsonObject.serializer(), requestJson)
                 Log.d(TAG, "Streaming request prepared, messages=${messagesWithSystem.size}, bodyLength=${requestBody.length}")
                 
                 val streamAccumulator = ChatStreamAccumulator()
-                
-                // 性能优化：UI 更新节流（每 50ms 最多更新一次）
-                var lastUiUpdateTime = 0L
-                val uiUpdateThrottleMs = 50L
                 var pendingUiUpdate = false
 
+                // Batch stream frame pacer: delivers incoming token batches every 60ms to eliminate UI thread lag
+                val streamPacerJob = viewModelScope.launch(Dispatchers.Main) {
+                    while (isActive && !streamAccumulator.isFinished) {
+                        delay(60L)
+                        if (pendingUiUpdate) {
+                            pendingUiUpdate = false
+                            val snapshot = streamAccumulator.snapshot()
+                            val index = messages.indexOfFirst { it.id == aiMessageId }
+                            if (index >= 0) {
+                                messages[index] = messages[index].copy(
+                                    content = snapshot.content,
+                                    thinkingContent = snapshot.thinkingContent
+                                )
+                            }
+                        }
+                    }
+                }
+
                 fun completeStreamingResponse(cancelEventSource: Boolean = false) {
+                    streamPacerJob.cancel()
                     if (!streamAccumulator.finish()) return
                     val snapshot = streamAccumulator.snapshot()
 
@@ -1424,7 +1401,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         
                         val index = messages.indexOfFirst { it.id == aiMessageId }
                         if (index >= 0) {
-                            // 确保最终内容完整更新（节流可能跳过最后几个 chunk）
                             messages[index] = messages[index].copy(
                                 content = snapshot.content,
                                 thinkingContent = snapshot.thinkingContent,
@@ -1432,7 +1408,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
 
-                        // 保存到数据库
                         if (snapshot.hasContent) {
                             messageDao.insertMessage(MessageEntity(
                                 id = aiMessageId,
@@ -1444,7 +1419,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             ))
                         } else {
                             if (index >= 0) {
-                                messages[index] = messages[index].copy(content = "⚠️ 无内容返回")
+                                val targetUrl = chatApiClient.buildUrl(effectiveBaseUrl, "chat/completions")
+                                val debugMsg = streamAccumulator.getDebugSummary(targetUrl, model)
+                                messages[index] = messages[index].copy(content = debugMsg, isStreaming = false)
                             }
                         }
                     }
@@ -1457,7 +1434,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     callback = object : ChatStreamCallback {
                         override fun onOpen(responseCode: Int) {
                             Log.d(TAG, "SSE onOpen: $responseCode")
-                            streamingTokenCount = 0 // 重置 token 计数
+                            streamAccumulator.lastHttpCode = responseCode
+                            streamingTokenCount = 0
+                        }
+
+                        override fun onRawEvent(data: String) {
+                            streamAccumulator.recordEvent(data)
                         }
 
                         override fun onDelta(delta: ChatStreamDelta) {
@@ -1471,22 +1453,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             val snapshot = streamAccumulator.applyDelta(delta) ?: return
                             streamingTokenCount = snapshot.tokenCount
                             pendingUiUpdate = true
-
-                            // 节流 UI 更新：最多每 50ms 更新一次
-                            val now = System.currentTimeMillis()
-                            if (pendingUiUpdate && (now - lastUiUpdateTime >= uiUpdateThrottleMs)) {
-                                pendingUiUpdate = false
-                                lastUiUpdateTime = now
-                                viewModelScope.launch {
-                                    val index = messages.indexOfFirst { it.id == aiMessageId }
-                                    if (index >= 0) {
-                                        messages[index] = messages[index].copy(
-                                            content = snapshot.content,
-                                            thinkingContent = snapshot.thinkingContent
-                                        )
-                                    }
-                                }
-                            }
                         }
 
                         override fun onDone() {
@@ -1500,11 +1466,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         override fun onFailure(message: String, throwable: Throwable?, responseCode: Int?) {
+                            streamPacerJob.cancel()
                             currentEventSource = null
-                            // 特殊处理 stream was reset 错误：如果已经有内容生成，则视为成功
                             if (streamAccumulator.isStreamResetSuccess(message)) {
                                 Log.w(TAG, "Stream reset ignored, treating as success (content length: ${streamAccumulator.snapshot().contentLength})")
                                 completeStreamingResponse()
+                                return
+                            }
+
+                            // Auto-retry on 429 rate limit with exponential backoff
+                            val maxRetries = 3
+                            if (responseCode == 429 && retryAttempt < maxRetries) {
+                                val backoffMs = (2000L shl retryAttempt) + (0..1000).random()
+                                val nextAttempt = retryAttempt + 1
+                                Log.w(TAG, "Rate limited (429), retrying in ${backoffMs}ms (attempt $nextAttempt/$maxRetries)")
+                                
+                                viewModelScope.launch {
+                                    val index = messages.indexOfFirst { it.id == aiMessageId }
+                                    if (index >= 0) {
+                                        messages[index] = messages[index].copy(
+                                            content = "⏳ Rate limited. Retrying in ${backoffMs / 1000}s... (attempt $nextAttempt/$maxRetries)"
+                                        )
+                                    }
+                                    delay(backoffMs)
+                                    callStreamingApiWithEventSource(aiMessageId, conversationId, nextAttempt)
+                                }
                                 return
                             }
 
@@ -1515,16 +1501,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             viewModelScope.launch {
                                 finishGeneration()
 
-                                val errorDetail = "请求失败: $message"
+                                val errorDetail = "Request failed: $message"
                                 showErrorMessage(errorDetail)
 
-                                // 仅当消息为空时才显示错误占位符，否则保留已有内容
                                 val index = messages.indexOfFirst { it.id == aiMessageId }
                                 if (index >= 0) {
                                     val currentMsg = messages[index]
-                                    if (currentMsg.content.isBlank()) {
+                                    if (currentMsg.content.isBlank() || currentMsg.content.startsWith("⏳")) {
+                                        val targetUrl = chatApiClient.buildUrl(effectiveBaseUrl, "chat/completions")
+                                        val displayMsg = buildString {
+                                            append("⚠️ Request Failed\n\n")
+                                            if (responseCode != null) append("• HTTP Status: $responseCode\n")
+                                            append("• Model: $model\n")
+                                            append("• Endpoint: $targetUrl\n\n")
+                                            append("Details: $message")
+                                            if (retryAttempt > 0) append("\n\n(Failed after $retryAttempt retries)")
+                                        }
                                         messages[index] = currentMsg.copy(
-                                            content = "⚠️ 加载失败", // 简单提示，详细看弹窗
+                                            content = displayMsg,
                                             isStreaming = false
                                         )
                                     } else {
@@ -1543,10 +1537,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e(TAG, "Streaming request setup failed", e)
                 finishGeneration()
-                val errorMsg = "初始化流式请求失败: ${e.message}"
+                val errorMsg = "Failed to initialize streaming: ${e.message}"
                 showErrorMessage(errorMsg)
 
-                // 绝不移除气泡，而是显示错误
                 val index = messages.indexOfFirst { it.id == aiMessageId }
                 if (index >= 0) {
                     messages[index] = messages[index].copy(
@@ -1585,19 +1578,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentEventSource?.cancel()
     }
 
-    // 保存图片到相册
     fun saveImageToGallery(imageUrl: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val context = getApplication<Application>()
                 val filename = "Fluxhub_${System.currentTimeMillis()}.jpg"
                 
-                // 1. 下载图片数据
                 val request = Request.Builder().url(imageUrl).build()
                 val response = client.newCall(request).execute()
                 val bytes = response.body?.bytes() ?: throw Exception("Download failed")
                 
-                // 2. 写入 MediaStore
                 val contentValues = android.content.ContentValues().apply {
                     put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, filename)
                     put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
@@ -1622,9 +1612,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     
                     withContext(Dispatchers.Main) {
-                        // 使用灵动岛通知替换 Toast
                         com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showSuccess(
-                            message = "图片已保存至相册",
+                            message = "Image saved to gallery",
                             avatar = "🖼️"
                         )
                     }
@@ -1633,7 +1622,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     com.liquidglass.fluxhub.chat.ui.components.DynamicIslandController.showError(
-                        message = "保存失败"
+                        message = "Failed to save image"
                     )
                 }
             }

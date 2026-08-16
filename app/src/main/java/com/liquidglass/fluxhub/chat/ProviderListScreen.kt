@@ -38,7 +38,7 @@ import com.liquidglass.fluxhub.components.LiquidConfirmationDialog
 import com.liquidglass.fluxhub.data.ProviderEntity
 
 /**
- * 服务商列表页面 - Liquid Glass 风格
+ * Provider List Screen - Liquid Glass Style
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,11 +75,11 @@ fun ProviderListScreen(
                 isInteractive = true,
                 padding = PaddingValues(0.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
             
             Text(
-                "服务商管理",
+                "Provider Management",
                 style = TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
@@ -95,11 +95,11 @@ fun ProviderListScreen(
                 isInteractive = true,
                 padding = PaddingValues(0.dp)
             ) {
-                Icon(Icons.Default.Add, "新建", tint = Color.White)
+                Icon(Icons.Default.Add, "New", tint = Color.White)
             }
         }
         
-        // 服务商列表
+        // Provider List
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -116,7 +116,6 @@ fun ProviderListScreen(
                 )
             }
             
-            // 空状态
             if (viewModel.providers.isEmpty()) {
                 item {
                     Box(
@@ -134,12 +133,12 @@ fun ProviderListScreen(
                             )
                             Spacer(Modifier.height(16.dp))
                             Text(
-                                "暂无服务商",
+                                "No Providers Available",
                                 color = Color.White.copy(alpha = 0.6f)
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "点击右上角 + 添加 API Provider",
+                                "Tap the + button in the top right to add an API provider",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.4f)
                             )
@@ -150,7 +149,7 @@ fun ProviderListScreen(
         }
     }
     
-    // 创建/编辑对话框
+    // Create/Edit Dialog
     if (showCreateDialog || editingProvider != null) {
         ProviderEditDialog(
             provider = editingProvider,
@@ -266,7 +265,7 @@ private fun ProviderCard(
                 if (isActive) {
                     Icon(
                         Lucide.Check,
-                        contentDescription = "激活中",
+                        contentDescription = "Active",
                         tint = Color(0xFF34C759),
                         modifier = Modifier.size(20.dp)
                     )
@@ -274,12 +273,12 @@ private fun ProviderCard(
                 }
                 
                 IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                    Icon(Lucide.Pencil, "编辑", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                    Icon(Lucide.Pencil, "Edit", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                 }
                 
                 var showDeleteDialog by remember { mutableStateOf(false) }
                 IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(Lucide.Trash2, "删除", tint = Color(0xFFFF3B30).copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                    Icon(Lucide.Trash2, "Delete", tint = Color(0xFFFF3B30).copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                 }
                 
                 if (showDeleteDialog) {
@@ -289,9 +288,9 @@ private fun ProviderCard(
                             onDelete()
                             showDeleteDialog = false
                         },
-                        title = "删除服务商",
-                        message = "确定要删除此服务商吗？此操作不可撤销。",
-                        confirmText = "删除",
+                        title = "Delete Provider",
+                        message = "Are you sure you want to delete this provider? This action cannot be undone.",
+                        confirmText = "Delete",
                         icon = Lucide.Trash2,
                         backdrop = backdrop
                     )
@@ -337,7 +336,7 @@ private fun ProviderEditDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = if (provider == null) "添加服务商" else "编辑服务商",
+                    text = if (provider == null) "Add Provider" else "Edit Provider",
                     style = TextStyle(
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
@@ -349,16 +348,16 @@ private fun ProviderEditDialog(
                 LiquidTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = "名称",
-                    placeholder = "如：OpenAI、DeepSeek",
+                    label = "Name",
+                    placeholder = "e.g., OpenAI, DeepSeek",
                     backdrop = backdrop
                 )
                 
                 LiquidTextField(
                     value = icon,
                     onValueChange = { icon = it },
-                    label = "图标",
-                    placeholder = "输入 Emoji",
+                    label = "Icon",
+                    placeholder = "Enter an Emoji",
                     backdrop = backdrop
                 )
                 
@@ -392,7 +391,7 @@ private fun ProviderEditDialog(
                         isInteractive = true,
                         tint = Color(0xFF8E8E93).copy(alpha = 0.5f)
                     ) {
-                        Text("取消", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Cancel", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                     
                     Spacer(Modifier.width(12.dp))
@@ -408,7 +407,7 @@ private fun ProviderEditDialog(
                         isInteractive = true,
                         tint = Color(0xFF007AFF)
                     ) {
-                        Text("保存", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
