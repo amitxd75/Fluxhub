@@ -79,17 +79,22 @@ class ChatRequestBuilderTest {
 
     @Test
     fun buildRequestJsonAddsOpenAiOnlyOptionsOnlyWhenRequested() {
-        val openAiReasoning = ChatRequestBuilder.reasoningEffortOrNull(
+        val reasoningLow = ChatRequestBuilder.reasoningEffortOrNull(
             effectiveBaseUrl = "https://api.openai.com/v1",
-            thinkingBudget = 8192
+            thinkingBudget = 2048
         )
-        val nonOpenAiReasoning = ChatRequestBuilder.reasoningEffortOrNull(
+        val reasoningMedium = ChatRequestBuilder.reasoningEffortOrNull(
             effectiveBaseUrl = "https://example.com/v1",
             thinkingBudget = 8192
         )
+        val reasoningOff = ChatRequestBuilder.reasoningEffortOrNull(
+            effectiveBaseUrl = "https://example.com/v1",
+            thinkingBudget = 0
+        )
 
-        assertEquals("medium", openAiReasoning)
-        assertNull(nonOpenAiReasoning)
+        assertEquals("low", reasoningLow)
+        assertEquals("medium", reasoningMedium)
+        assertNull(reasoningOff)
 
         val request = ChatRequestBuilder.buildRequestJson(
             model = "gpt-test",
@@ -98,7 +103,7 @@ class ChatRequestBuilderTest {
             temperature = 0.7f,
             topP = 1.0f,
             maxTokens = null,
-            reasoningEffort = openAiReasoning,
+            reasoningEffort = reasoningMedium,
             includeStreamOptions = true
         )
 
@@ -114,7 +119,7 @@ class ChatRequestBuilderTest {
             temperature = 0.7f,
             topP = 1.0f,
             maxTokens = null,
-            reasoningEffort = nonOpenAiReasoning,
+            reasoningEffort = reasoningOff,
             includeStreamOptions = false
         )
 
