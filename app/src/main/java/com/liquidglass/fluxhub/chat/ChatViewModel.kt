@@ -1482,12 +1482,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 Log.w(TAG, "Rate limited (429), retrying in ${backoffMs}ms (attempt $nextAttempt/$maxRetries)")
                                 
                                 viewModelScope.launch {
-                                    val index = messages.indexOfFirst { it.id == aiMessageId }
-                                    if (index >= 0) {
-                                        messages[index] = messages[index].copy(
-                                            content = "⏳ Rate limited. Retrying in ${backoffMs / 1000}s... (attempt $nextAttempt/$maxRetries)"
-                                        )
-                                    }
                                     delay(backoffMs)
                                     callStreamingApiWithEventSource(aiMessageId, conversationId, nextAttempt)
                                 }
@@ -1501,21 +1495,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             viewModelScope.launch {
                                 finishGeneration()
 
-                                val errorDetail = "Request failed: $message"
-                                showErrorMessage(errorDetail)
-
                                 val index = messages.indexOfFirst { it.id == aiMessageId }
                                 if (index >= 0) {
                                     val currentMsg = messages[index]
-                                    if (currentMsg.content.isBlank() || currentMsg.content.startsWith("⏳")) {
-                                        val targetUrl = chatApiClient.buildUrl(effectiveBaseUrl, "chat/completions")
-                                        val displayMsg = buildString {
-                                            append("⚠️ Request Failed\n\n")
-                                            if (responseCode != null) append("• HTTP Status: $responseCode\n")
-                                            append("• Model: $model\n")
-                                            append("• Endpoint: $targetUrl\n\n")
-                                            append("Details: $message")
-                                            if (retryAttempt > 0) append("\n\n(Failed after $retryAttempt retries)")
+                                    if (currentMsg.content.isBlank()) {
+                                        val displayMsg = when (responseCode) {
+                                            429 -> "⏳ The provider is currently rate limited or busy. Please wait a moment and try again."
+                                            401 -> "🔑 Invalid API key. Please check your provider settings."
+                                            404 -> "🔍 Model '$model' was not found on this endpoint."
+                                            else -> "⚠️ Unable to get a response from $model. ($message)"
                                         }
                                         messages[index] = currentMsg.copy(
                                             content = displayMsg,
