@@ -1,15 +1,66 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    
+    <!-- Outer squircle glass background -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,32h48c4.4,0 8,3.6 8,8v28c0,4.4 -3.6,8 -8,8H30c-4.4,0 -8,-3.6 -8,-8V40c0,-4.4 3.6,-8 8,-8z" />
+        android:pathData="M24,14h60c14,0 24,10 24,24v60c0,14 -10,24 -24,24H24C10,122 0,112 0,98V38C0,24 10,14 24,14z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="10"
+                android:startY="10"
+                android:endX="98"
+                android:endY="98"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#2A1B4E" />
+                <item android:offset="0.5" android:color="#17122B" />
+                <item android:offset="1.0" android:color="#0F1020" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top Fluid 'F' Shape with Neon Purple-Violet Glow -->
     <path
-        android:fillColor="#007AFF"
-        android:pathData="M38,42h32c2.2,0 4,1.8 4,4v16c0,2.2 -1.8,4 -4,4H38c-2.2,0 -4,-1.8 -4,-4V46c0,-2.2 1.8,-4 4,-4z" />
+        android:pathData="M34,30 C34,26 38,24 45,24 C60,24 74,27 75,34 C76,41 68,46 54,46 C48,46 44,48 42,53 C40,58 38,70 34,74 C31,76 29,74 29,70 C29,62 34,42 34,30 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="29"
+                android:startY="24"
+                android:endX="75"
+                android:endY="60"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFC058F8" />
+                <item android:offset="0.6" android:color="#FF8A3FFC" />
+                <item android:offset="1.0" android:color="#FF4589FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Bottom Wave Fluid Shape with Cyan-Blue Glow -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M44,51h20v6H44z" />
+        android:pathData="M52,60 C58,54 68,52 74,58 C80,64 82,75 75,81 C66,88 50,86 42,78 C38,74 44,68 52,60 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="40"
+                android:startY="52"
+                android:endX="82"
+                android:endY="88"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF00D2FF" />
+                <item android:offset="0.5" android:color="#FF007AFF" />
+                <item android:offset="1.0" android:color="#FF3344EE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    
+    <!-- Top inner highlight specular rim -->
+    <path
+        android:pathData="M40,26 C52,26 68,28 70,32"
+        android:strokeWidth="1.5"
+        android:strokeColor="#80FFFFFF"
+        android:strokeLineCap="round" />
+
 </vector>

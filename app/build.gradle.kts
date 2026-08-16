@@ -28,6 +28,9 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+    androidResources {
+        noCompress += listOf("png", "webp", "jpg")
+    }
     buildFeatures {
         compose = true
     }
