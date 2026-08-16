@@ -106,9 +106,14 @@ object ChatRequestBuilder {
             put("top_p", topP)
             maxTokens?.let { put("max_tokens", it) }
             
-            // Standard OpenAI reasoning effort specification for reasoning architectures
-            if (isReasoningModel && !reasoningEffort.isNullOrBlank()) {
+            if (!reasoningEffort.isNullOrBlank()) {
                 put("reasoning_effort", reasoningEffort)
+            }
+
+            if (includeStreamOptions && stream) {
+                put("stream_options", buildJsonObject {
+                    put("include_usage", true)
+                })
             }
         }
     }
